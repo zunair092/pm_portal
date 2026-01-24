@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-4ax=0&#j6c$^@q(rsa01dxqf76zbrosnz516!is$x-1yqmc+a4"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['93.188.162.90']
 
 AUTH_USER_MODEL = 'core.User'
 
@@ -88,17 +88,26 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'pm_portal_db',
+#         'USER': 'postgres',
+#         'PASSWORD': 'Zaini1588@@',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'pm_portal_db',
-        'USER': 'postgres',
+        'NAME': 'pm_portal_db',        # VPS database name
+        'USER': 'pm_user',             # VPS DB user
         'PASSWORD': 'Zaini1588@@',
         'HOST': 'localhost',
         'PORT': '5432',
     }
 }
-
 
 
 # Password validation
