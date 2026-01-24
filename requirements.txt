@@ -1,5 +1,5 @@
 Django==4.2.8
 asgiref==3.7.2
-psycopg2-binary==2.9.11
+psycopg2-binary==2.9.10
 sqlparse==0.5.5
 tzdata==2025.3
