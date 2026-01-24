@@ -1,0 +1,48 @@
+<!-- QA Revision Modal -->
+<div class="modal fade" id="qaRevisionModal{{ project.id }}" tabindex="-1" aria-labelledby="qaRevisionModalLabel{{ project.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="qaRevisionModalLabel{{ project.id }}">
+                    ❌ Send to Revision - {{ project.project_name }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="qa_send_to_revision">
+                <input type="hidden" name="project_id" value="{{ project.id }}">
+                
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Note:</strong> This project will be moved to the Revision tab and all assigned employees will be notified.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="qa_revision_instructions{{ project.id }}" class="form-label">
+                            <strong>Revision Instructions</strong> <span class="text-danger">*</span>
+                        </label>
+                        <textarea 
+                            class="form-control" 
+                            id="qa_revision_instructions{{ project.id }}" 
+                            name="qa_revision_instructions" 
+                            rows="5" 
+                            placeholder="Please provide detailed instructions for what needs to be revised..."
+                            required
+                        ></textarea>
+                        <small class="form-text text-muted">
+                            Be specific about what needs to be fixed or improved.
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        ❌ Send to Revision
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,42 @@
+<!-- Team Lead Reject Modal -->
+<div class="modal fade" id="teamLeadRejectModal{{ project.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Reject Project - {{ project.project_name }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="team_lead_reject">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Warning:</strong> Rejecting will reset project progress to 0% and send it back to Active status.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="tl_reject_instructions{{ project.id }}" class="form-label">
+                            <strong>Rejection Instructions (Required):</strong>
+                        </label>
+                        <textarea 
+                            class="form-control" 
+                            id="tl_reject_instructions{{ project.id }}" 
+                            name="tl_reject_instructions" 
+                            rows="5" 
+                            required
+                            placeholder="Explain what needs to be fixed or improved..."
+                        ></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to reject this project?');">
+                        ❌ Reject & Reset Progress
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

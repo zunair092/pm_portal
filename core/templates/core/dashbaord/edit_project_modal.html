@@ -1,0 +1,161 @@
+<!-- Edit Project Modal -->
+<div class="modal fade pm-modal" id="editProjectModal{{ project.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data" action="{% url 'project_management' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_project">
+                <input type="hidden" name="project_id" value="{{ project.id }}">
+                
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Project - {{ project.project_name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row">
+
+                        {% if user.is_superuser or user.role == 'admin' %}
+                        <div class="col-md-6 mb-3">
+                            <label>Project Name</label>
+                            <input type="text" name="project_name" value="{{ project.project_name }}" class="pm-input form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Project ID</label>
+                            <input type="text" value="{{ project.project_id }}" class="pm-input form-control" disabled>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Client Name</label>
+                            <input type="text" name="client_name" value="{{ project.client_name }}" class="pm-input form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Assign Date</label>
+                            <input type="date" name="assign_date" value="{{ project.assign_date }}" class="pm-input form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Due Date</label>
+                            <input type="date" name="due_date" value="{{ project.due_date }}" class="pm-input form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Expected Date</label>
+                            <input type="date" name="expected_date" class="pm-input form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Project Link</label>
+                            <input type="url" name="project_link" class="pm-input form-control" placeholder="https://example.com">
+                    </div>
+
+
+                        <div class="col-md-6 mb-3">
+                            <label>Team Lead</label>
+                            <select name="team_lead" class="pm-select form-control">
+                                {% for tl in all_team_leads %}
+                                    <option value="{{ tl.id }}" {% if tl.id|default:0 == project.team_lead.id|default:0 %}selected{% endif %}>
+                                        {{ tl.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>QA Person</label>
+                            <select name="qa_person" class="pm-select form-control">
+                                <option value="">-- Select QA Person (Optional) --</option>
+                                {% for qa in all_qa %}
+                                    <option value="{{ qa.id }}" {% if project.qa_person and qa.id == project.qa_person.id %}selected{% endif %}>
+                                        {{ qa.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label>Scope</label>
+                            <textarea name="scope" class="pm-textarea form-control">{{ project.projectdetail.scope }}</textarea>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label>Comments</label>
+                            <textarea name="comments" class="pm-textarea form-control">{{ project.projectdetail.comments }}</textarea>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label>Revisions</label>
+                            <textarea name="revisions" class="pm-textarea form-control">{{ project.projectdetail.revisions }}</textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Progress (%)</label>
+                            <input type="number" name="progress" value="{{ project.progress }}" class="pm-input form-control">
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label>Assign Employees</label>
+                            <select name="assign_person" multiple class="pm-select form-control">
+                                {% for emp in all_employees %}
+                                    <option value="{{ emp.id }}" {% if emp in project.projectdetail.assign_person.all %}selected{% endif %}>
+                                        {{ emp.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label>Project Files</label>
+                            {% for f in project.projectdetail.files.all %}
+                                <div class="d-flex align-items-center mb-1">
+                                    <a href="{{ f.file.url }}" target="_blank">{{ f.file.name|slice:'12:' }}</a>
+                                    <input type="checkbox" name="remove_files" value="{{ f.id }}" class="ms-2"> Remove
+                                </div>
+                            {% empty %}
+                                <p>No files uploaded yet.</p>
+                            {% endfor %}
+                            <input type="file" name="project_file" multiple class="pm-input form-control">
+                        </div>
+                        {% endif %}
+
+                        {% if user.role == 'team_lead' %}
+                        <div class="col-md-12 mb-3">
+                            <label>Assign Employees</label>
+                            <select name="assign_person" multiple class="pm-select form-control">
+                                {% for emp in all_employees %}
+                                    <option value="{{ emp.id }}" {% if emp in project.projectdetail.assign_person.all %}selected{% endif %}>
+                                        {{ emp.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label>Comments</label>
+                            <textarea name="comments_team_lead" class="pm-textarea form-control">{{ project.projectdetail.comments_team_lead }}</textarea>
+                        </div>
+                        {% endif %}
+
+                        {% if user.role == 'employee' %}
+                        <div class="col-md-6 mb-3">
+                            <label>Progress (%)</label>
+                            <input type="number" name="progress" value="{{ project.progress }}" class="pm-input form-control">
+                        </div>
+
+                        <div class="col-md-12 mb-3">
+                            <label>Final Submitted Files (Employee)</label>
+
+                            {% if project.final_files.all %}
+                                {% for f in project.final_files.all %}
+                                    <div class="d-flex align-items-center mb-1">
+                                        <a href="{{ f.file.url }}" target="_blank">{{ f.file.name|slice:'12:' }}</a>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <p>No final files uploaded yet.</p>
+                            {% endif %}
+
+                            <input type="file" name="final_files" multiple class="pm-input form-control">
+                        </div>
+                        {% endif %}
+
+
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="pm-btn pm-btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="pm-btn pm-btn-success">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
