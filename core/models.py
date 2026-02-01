@@ -6,7 +6,7 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('admin', 'Admin'),
         ('team_lead', 'Team Lead'),
-        ('employee', 'Employee'),
+        ('employee', 'Estimator'),
         ('qa', 'QA'),  # 🔥 NEW ROLE
     )
 
@@ -132,6 +132,8 @@ class EmployeeProjectProgress(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="employee_progresses")
     employee = models.ForeignKey(User, on_delete=models.CASCADE, limit_choices_to={'role': 'employee'})
     progress = models.PositiveIntegerField(default=0)  # 0-100%
+    working_hours = models.FloatField(blank=True, null=True)
+    final_submission_link = models.URLField(blank=True, null=True)
 
     class Meta:
         unique_together = ('project', 'employee')

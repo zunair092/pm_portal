@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-4ax=0&#j6c$^@q(rsa01dxqf76zbrosnz516!is$x-1yqmc+a4"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['93.188.162.90']
+# ALLOWED_HOSTS = ['93.188.162.90']
 
 AUTH_USER_MODEL = 'core.User'
 
@@ -88,26 +88,26 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'pm_portal_db',
-#         'USER': 'postgres',
-#         'PASSWORD': 'Zaini1588@@',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'pm_portal_db',        # VPS database name
-        'USER': 'pm_user',             # VPS DB user
+        'NAME': 'pm_portal_db',
+        'USER': 'postgres',
         'PASSWORD': 'Zaini1588@@',
         'HOST': 'localhost',
         'PORT': '5432',
     }
 }
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'pm_portal_db',        # VPS database name
+#         'USER': 'pm_user',             # VPS DB user
+#         'PASSWORD': 'Zaini1588@@',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
 
 
 # Password validation
@@ -146,13 +146,34 @@ USE_TZ = True
 
 
 import os
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# Add this line for development
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'core/static'),
+]
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# For CSRF protection on live site
+# CSRF_TRUSTED_ORIGINS = [
+#     "http://93.188.162.90",   # if using HTTP
+#     # "https://93.188.162.90", # if using HTTPS
+# ]
+
+# Secure cookies (set to True if using HTTPS)
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+
+# Cookie SameSite setting
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'

@@ -84,8 +84,8 @@
                             <input type="number" name="progress" value="{{ project.progress }}" class="pm-input form-control">
                         </div>
                         <div class="col-md-12 mb-3">
-                            <label>Assign Employees</label>
-                            <select name="assign_person" multiple class="pm-select form-control">
+                            <label>Assign Estimator</label>
+                            <select name="assign_person" multiple class="pm-select form-control employee-select">
                                 {% for emp in all_employees %}
                                     <option value="{{ emp.id }}" {% if emp in project.projectdetail.assign_person.all %}selected{% endif %}>
                                         {{ emp.username }}
@@ -130,8 +130,19 @@
                             <input type="number" name="progress" value="{{ project.progress }}" class="pm-input form-control">
                         </div>
 
+                        <div class="col-md-6 mb-3">
+                            <label>Working Hours</label>
+                            <input type="number" step="0.1" name="working_hours" class="pm-input form-control">
+                        </div>
+
                         <div class="col-md-12 mb-3">
-                            <label>Final Submitted Files (Employee)</label>
+                            <label>Final Submission Link</label>
+                            <input type="url" name="final_submission_link" class="pm-input form-control" placeholder="https://drive.google.com/...">
+                        </div>
+
+
+                        <div class="col-md-12 mb-3">
+                            <label>Final Submitted Files (Estimator)</label>
 
                             {% if project.final_files.all %}
                                 {% for f in project.final_files.all %}

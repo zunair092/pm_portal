@@ -235,22 +235,48 @@ def project_management_view(request):
                         project=project,
                         employee=user
                     )
+                    working_hours = request.POST.get('working_hours')
+                    final_submission_link = request.POST.get('final_submission_link')
+
                     obj.progress = progress
+
+                    if working_hours:
+                        obj.working_hours = float(working_hours)
+
+                    if final_submission_link:
+                        obj.final_submission_link = final_submission_link
+
                     obj.save()
+
 
                     # Calculate average progress over all assigned employees
                     assigned_employees = detail.assign_person.all()
+
                     total_progress = 0
+                    total_hours = 0
+                    hours_count = 0
+
                     for emp in assigned_employees:
                         try:
-                            emp_progress = EmployeeProjectProgress.objects.get(project=project, employee=emp).progress
+                            emp_obj = EmployeeProjectProgress.objects.get(project=project, employee=emp)
+                            emp_progress = emp_obj.progress
+                            emp_hours = emp_obj.working_hours
                         except EmployeeProjectProgress.DoesNotExist:
                             emp_progress = 0
+                            emp_hours = None
+
                         total_progress += emp_progress
 
+                        if emp_hours is not None:
+                            total_hours += emp_hours
+                            hours_count += 1
+
                     avg_progress = round(total_progress / assigned_employees.count()) if assigned_employees.exists() else 0
+                    avg_hours = round(total_hours / hours_count, 2) if hours_count else 0
+
                     project.progress = avg_progress
                     project.save()
+
 
 
                     # Notifications
@@ -279,19 +305,6 @@ def project_management_view(request):
                     notify(project.team_lead, f"📁 {user.username} uploaded final file '{file.name}' for project '{project.project_name}'")
 
                 messages.success(request, "Project progress updated successfully.")
-
-
-                # === Final Submission Files Upload ===
-                for file in request.FILES.getlist('final_files'):
-                    FinalSubmissionFile.objects.create(
-                        project=project,
-                        file=file,
-                        uploaded_by=user
-                    )
-                    notify(project.team_lead, f"📁 {user.username} uploaded final file '{file.name}' for project '{project.project_name}'")
-
-                messages.success(request, "Project updated successfully (Final files uploaded).")
-
 
             return redirect('project_management')
         
@@ -408,6 +421,9 @@ def project_management_view(request):
                     detail.revisions = f"--- QA Revision ({timezone.now().strftime('%Y-%m-%d %H:%M')}) ---\n{qa_revision_instructions}"
                 
                 detail.save()
+                # 🔥 RESET EMPLOYEES' PROGRESS TO 0
+                EmployeeProjectProgress.objects.filter(project=project).update(progress=0, working_hours=0)
+
                 project.save()
                 
                 messages.warning(request, f"Project '{project.project_name}' sent to Revision tab with instructions.")
@@ -430,12 +446,23 @@ def project_management_view(request):
         else:
             p.days_left = None
 
+        # Calculate total working hours per project
+        total_hours = 0
+        for ep in EmployeeProjectProgress.objects.filter(project=p):
+            if ep.working_hours:
+                total_hours += ep.working_hours
+        p.total_working_hours = total_hours
+
+
+
     # 🔥 SORT PROJECTS BY PRIORITY (fewer days left = higher priority)
     # Projects with no due_date go to the end
     projects = sorted(projects, key=lambda p: (
         p.days_left is None,  # None values go last
         p.days_left if p.days_left is not None else float('inf')  # Sort by days_left ascending
     ))
+
+    
 
     return render(request, 'core/dashbaord/project_management.html', {
         'projects': projects,

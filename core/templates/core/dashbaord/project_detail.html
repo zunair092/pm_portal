@@ -739,6 +739,21 @@
                 {% endif %}
             </div>
         </div>
+        {% for ep in project.employee_progresses.all %}
+            {% if ep.final_submission_link %}
+            <div class="detail-card">
+                <h5><i class="fas fa-link"></i> Final Submission Link - {{ ep.employee.username }}</h5>
+                <p>
+                    <a href="{{ ep.final_submission_link }}" target="_blank" class="pm-btn pm-btn-primary">
+                        Open Submission Link
+                    </a>
+                </p>
+                <p style="font-size:0.9rem; word-break:break-word;">
+                    {{ ep.final_submission_link }}
+                </p>
+            </div>
+            {% endif %}
+        {% endfor %}
 
         <!-- Final Submission Files (Employee Uploads) -->
         <div class="files-section mt-4">

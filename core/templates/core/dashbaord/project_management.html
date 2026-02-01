@@ -1,7 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>Project Management Portal</title>
@@ -10,37 +9,39 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 </head>
-
-<body>
+<body class="project-management-css">
     <div class="pm-portal">
         <!-- Dashboard Wrapper -->
         <div class="pm-dashboard">
-
             <!-- Sidebar -->
             <div class="pm-sidebar">
                 <h2>PM Portal</h2>
-                {% if user.role == 'qa' %}
-                    <a href="?status=qa" class="{% if active_tab == 'qa' %}active{% endif %}">QA</a>
-                    <a href="?status=revision" class="{% if active_tab == 'revision' %}active{% endif %}">Revision</a>
-                    <a href="?status=approval" class="{% if active_tab == 'approval' %}active{% endif %}">Approval</a>
-                    <a href="?status=completed" class="{% if active_tab == 'completed' %}active{% endif %}">Completed</a>
-                {% else %}
-                    <a href="?status=active" class="{% if active_tab == 'active' %}active{% endif %}">Active Projects</a>
-                    <a href="?status=qa" class="{% if active_tab == 'qa' %}active{% endif %}">QA</a>
-                    <a href="?status=revision" class="{% if active_tab == 'revision' %}active{% endif %}">Revision</a>
-                    <a href="?status=approval" class="{% if active_tab == 'approval' %}active{% endif %}">Approval</a>
-                    <a href="?status=completed" class="{% if active_tab == 'completed' %}active{% endif %}">Completed</a>
-                {% endif %}
-
                 <a href="{% url 'logout' %}" class="pm-btn pm-btn-secondary text-center mt-auto">Logout</a>
             </div>
-
+            
             <!-- Main Content -->
             <div class="pm-main">
-
-
+                <!-- Project Header -->
+                {% include 'core/dashbaord/project_header.html' %}
+                
+                <!-- Top Navigation Tabs -->
+                <div class="pm-top-nav">
+                    {% if user.role == 'qa' %}
+                        <a href="?status=qa" class="pm-nav-item {% if active_tab == 'qa' %}active{% endif %}">QA</a>
+                        <a href="?status=revision" class="pm-nav-item {% if active_tab == 'revision' %}active{% endif %}">Revision</a>
+                        <a href="?status=approval" class="pm-nav-item {% if active_tab == 'approval' %}active{% endif %}">Approval</a>
+                        <a href="?status=completed" class="pm-nav-item {% if active_tab == 'completed' %}active{% endif %}">Completed</a>
+                    {% else %}
+                        <a href="?status=active" class="pm-nav-item {% if active_tab == 'active' %}active{% endif %}">Active Projects</a>
+                        <a href="?status=qa" class="pm-nav-item {% if active_tab == 'qa' %}active{% endif %}">QA</a>
+                        <a href="?status=revision" class="pm-nav-item {% if active_tab == 'revision' %}active{% endif %}">Revision</a>
+                        <a href="?status=approval" class="pm-nav-item {% if active_tab == 'approval' %}active{% endif %}">Approval</a>
+                        <a href="?status=completed" class="pm-nav-item {% if active_tab == 'completed' %}active{% endif %}">Completed</a>
+                    {% endif %}
+                </div>
+                
+                <!-- Content Area -->
                 <div class="pm-content">
-                    {% include 'core/dashbaord/project_header.html' %}
                     <div class="table-responsive">
                         <table class="table table-bordered table-hover pm-table">
                             <thead>
@@ -50,14 +51,15 @@
                                     <th>Project ID</th>
                                     {% if user.is_superuser or user.role == 'admin' %}<th>Client</th>{% endif %}
                                     <th>Assign Date</th>
-                                     {% if user.is_superuser or user.role == 'admin' or user.role == 'team_lead' %}<th>Due Date</th>{% endif %}
-                                     <th>Expected Date</th>
+                                    {% if user.is_superuser or user.role == 'admin' or user.role == 'team_lead' %}<th>Due Date</th>{% endif %}
+                                    <th>Expected Date</th>
                                     <th>Team Lead</th>
                                     <th>QA Person</th>
                                     <th>Scope</th>
                                     <th>Progress (%)</th>
-                                    <th>Assigned Employees</th>
-                                    <th>Status</th>
+                                    <th>Working Hours</th>
+                                    <th>Assigned Estimator</th>
+                                    <!-- <th>Status</th> -->
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -93,7 +95,6 @@
                                     <td>
                                         <!-- Overall Project Progress -->
                                         <strong>{{ project.progress|default:"0" }}%</strong>
-
                                         <!-- Individual Employee Progress -->
                                         <ul style="list-style:none; padding-left:0; margin:0;">
                                             {% for ep in project.employee_progresses.all %}
@@ -103,13 +104,28 @@
                                             {% endfor %}
                                         </ul>
                                     </td>
+                                    <td>
+                                        <!-- Total working hours for the project -->
+                                        <strong>Total: {{ project.total_working_hours|default:"0" }} hrs</strong>
+
+                                        <!-- Individual employee working hours -->
+                                        <ul style="list-style:none; padding-left:0; margin:0;">
+                                            {% for ep in project.employee_progresses.all %}
+                                                <li>
+                                                    {{ ep.employee.username }}: {{ ep.working_hours|default:"0" }} hrs
+                                                </li>
+                                            {% empty %}
+                                                <li>No working hours yet</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </td>
 
                                     <td>
                                         {% for emp in project.projectdetail.assign_person.all %}
                                         {{ emp.username }}{% if not forloop.last %}, {% endif %}
                                         {% empty %}-{% endfor %}
                                     </td>
-                                    {% if user.role == 'admin' or user.role == 'team_lead' or user.is_superuser %}
+                                    <!-- {% if user.role == 'admin' or user.role == 'team_lead' or user.is_superuser %}
                                     <td>
                                         <form method="post" class="d-inline">
                                             {% csrf_token %}
@@ -126,7 +142,7 @@
                                     </td>
                                     {% else %}
                                     <td></td>
-                                    {% endif %}
+                                    {% endif %} -->
                                     <td class="d-flex flex-column gap-1">
                                         <a href="{% url 'project_detail' project.id %}"
                                             class="pm-btn pm-btn-primary btn-sm">View</a>
@@ -136,7 +152,7 @@
                                             data-bs-target="#editProjectModal{{ project.id }}">Edit</button>
                                         {% endif %}
                                         
-                                            <!-- Team Lead Approve/Reject Buttons -->
+                                        <!-- Team Lead Approve/Reject Buttons -->
                                         {% if user.role == 'team_lead' and project.progress == 100 and not project.team_lead_approved and project.team_lead == user %}
                                         <form method="post" class="d-inline" onsubmit="return confirm('Approve this project and send to QA?');">
                                             {% csrf_token %}
@@ -151,7 +167,7 @@
                                             ❌ Not Approve
                                         </button>
                                         {% endif %}
-
+                                        
                                         <!-- QA Approve Button -->
                                         {% if user.role == 'qa' and project.team_lead_approved and not project.qa_approved and project.qa_person == user %}
                                         <form method="post" class="d-inline" onsubmit="return confirm('Approve this project and move to Approval tab?');">
@@ -168,7 +184,6 @@
                                         </button>
                                         {% endif %}
                                     </td>
-
                                 </tr>
                                 {% include 'core/dashbaord/edit_project_modal.html' with project=project %}
                                 {% include 'core/dashbaord/qa_revision_modal.html' with project=project %}
@@ -179,124 +194,20 @@
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
-
-    <script src="{% static 'core/bootstrap.bundle.min.js' %}"></script>
-    <!-- jQuery (required by Select2) -->
+    
+    <!-- jQuery FIRST (only once!) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
+    
+    <!-- Your local Bootstrap -->
+    <script src="{% static 'core/bootstrap.bundle.min.js' %}"></script>
+    
     <!-- Select2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-    <script>
-    /**
-     * 1. CONFIGURATION & INITIALIZATION
-     */
-    const wsScheme = window.location.protocol === "https:" ? "wss://" : "ws://";
-    const wsPath = wsScheme + window.location.host + "/ws/notifications/";
-    let socket = null;
-
-    function connect() {
-        socket = new WebSocket(wsPath);
-
-        socket.onopen = function() {
-            console.log("WebSocket connected for notifications.");
-        };
-
-        socket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            const msg = data.message;
-            console.log("Notification received:", msg);
-            
-            showNotification(msg);
-        };
-
-        socket.onclose = function(e) {
-            console.log("Socket is closed. Reconnecting in 3 seconds...", e.reason);
-            setTimeout(function() {
-                connect();
-            }, 3000);
-        };
-
-        socket.onerror = function(err) {
-            console.error("Socket encountered error: ", err.message, "Closing socket");
-            socket.close();
-        };
-    }
-
-    /**
-     * 2. NOTIFICATION LOGIC
-     */
-    function showNotification(message) {
-        // A. Desktop Toast Notification
-        if (Notification.permission === "granted") {
-            const notification = new Notification("PM Portal Update", {
-                body: message,
-                icon: "{% static 'core/img/logo.png' %}", // Ensure this path is correct
-                silent: false
-            });
-
-            notification.onclick = function() {
-                window.focus();
-                this.close();
-            };
-        }
-
-        // B. In-Page UI Alert (Bootstrap Styled)
-        const alertContainer = document.getElementById('notification-container') || createAlertContainer();
-        
-        const alertBox = document.createElement('div');
-        alertBox.className = "alert alert-primary alert-dismissible fade show shadow-lg border-start border-4 border-primary";
-        alertBox.role = "alert";
-        alertBox.style.marginBottom = "10px";
-        alertBox.style.minWidth = "300px";
-        
-        alertBox.innerHTML = `
-            <div class="d-flex align-items-center">
-                <div class="me-3">
-                    <strong>🔔 New Update</strong>
-                </div>
-                <div>${message}</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        `;
-
-        alertContainer.appendChild(alertBox);
-
-        // Auto-remove after 8 seconds
-        setTimeout(() => {
-            if (alertBox) {
-                alertBox.classList.remove('show');
-                setTimeout(() => alertBox.remove(), 500);
-            }
-        }, 8000);
-    }
-
-    /**
-     * 3. UTILITY FUNCTIONS
-     */
-    function createAlertContainer() {
-        const container = document.createElement('div');
-        container.id = 'notification-container';
-        container.style.position = 'fixed';
-        container.style.top = '20px';
-        container.style.right = '20px';
-        container.style.zIndex = '9999';
-        document.body.appendChild(container);
-        return container;
-    }
-
-    // Request permissions on startup
-    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-        Notification.requestPermission();
-    }
-
-    // Initialize connection
-    connect();
-</script>
-
+    
+    <!-- Your custom JS -->
+    <script src="{% static 'core/js/project.js' %}"></script>
+    
 </body>
-
 </html>
