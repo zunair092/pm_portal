@@ -1,30 +1,95 @@
 {% comment %}
-Project Header Section
-Use PM-specific classes for consistent layout
+Project Header Section - Sidebar Toggle Version
+All navigation, search, add project moved to sidebar
 {% endcomment %}
 
-<div class="pm-header mb-4">
-    <h3>Project Management Portal</h3>
-    <div class="user-info">Logged in as: <b>{{ user.username }} ({{ user.get_role_display }})</b></div>
-</div>
+<!-- Sidebar Overlay -->
+<div class="pm-sidebar-overlay" id="pmSidebarOverlay"></div>
 
-<div class="d-flex justify-content-between align-items-center mb-3 ps-4 pe-4">
+<!-- Sidebar -->
+<div class="pm-sidebar" id="pmSidebar">
+    <div class="pm-sidebar-header">
+        <span class="pm-logo">PM Portal</span>
+        <button class="pm-sidebar-close" id="pmSidebarClose" aria-label="Close sidebar">&times;</button>
+    </div>
+
+    <!-- User Info -->
+    <div class="pm-sidebar-user">
+        <div class="user-label">Logged in as</div>
+        <div class="user-name">{{ user.username }}</div>
+        <div class="user-role">{{ user.get_role_display }}</div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="pm-sidebar-nav">
+        <div class="pm-sidebar-nav-label">Projects</div>
+        <a href="?status=active" class="pm-nav-link {% if active_tab == 'active' %}active{% endif %}">
+            Active Projects
+            <span class="nav-badge">{{ active_count }}</span>
+        </a>
+        <a href="?status=qa" class="pm-nav-link {% if active_tab == 'qa' %}active{% endif %}">
+            QA
+            <span class="nav-badge">{{ qa_count }}</span>
+        </a>
+        <a href="?status=revision" class="pm-nav-link {% if active_tab == 'revision' %}active{% endif %}">
+            Revision
+            <span class="nav-badge">{{ revision_count }}</span>
+        </a>
+        <a href="?status=approval" class="pm-nav-link {% if active_tab == 'approval' %}active{% endif %}">
+            Approval
+            <span class="nav-badge">{{ approval_count }}</span>
+        </a>
+        <a href="?status=completed" class="pm-nav-link {% if active_tab == 'completed' %}active{% endif %}">
+            Completed
+            <span class="nav-badge">{{ completed_count }}</span>
+        </a>
+    </nav>
+
     <!-- Search Form -->
-    <form method="get" class="d-flex" style="width: 50%;">
-        <input type="text" name="q" class="pm-input form-control me-2" placeholder="Search projects..."
-            value="{{ query }}">
-        <button type="submit" class="pm-btn pm-btn-primary">Search</button>
+    <div class="pm-sidebar-search">
+        <form method="get" class="search-input-wrap">
+            <input type="text" name="status" value="{{ request.GET.status }}" style="display:none;">
+            <input type="text" name="q" placeholder="Search projects..." value="{{ query }}">
+            <button type="submit" class="search-btn">Go</button>
+        </form>
         {% if query %}
-        <a href="{% url 'project_management' %}" class="pm-btn pm-btn-secondary ms-2">Clear</a>
+        <a href="{% url 'project_management' %}" class="clear-btn">Clear search</a>
         {% endif %}
-    </form>
+    </div>
 
-    <!-- Add New Project Button (Admin Only) -->
+    <!-- Add New Project (Admin Only) -->
     {% if user.is_superuser or user.role == 'admin' %}
-    <button class="pm-btn pm-btn-success" data-bs-toggle="modal" data-bs-target="#addProjectModal">+ Add New
-        Project</button>
+    <div class="pm-sidebar-actions">
+        <button class="pm-sidebar-add-btn" data-bs-toggle="modal" data-bs-target="#addProjectModal">
+            + Add New Project
+        </button>
+    </div>
     {% endif %}
+
+    <!-- Logout -->
+    <div class="pm-sidebar-footer">
+        <a href="{% url 'logout' %}" class="pm-logout-btn">Logout</a>
+    </div>
 </div>
+
+<!-- Topbar -->
+<div class="pm-topbar">
+    <button class="pm-hamburger" id="pmHamburger" aria-label="Open sidebar">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    <div class="pm-topbar-title">Project Management Portal</div>
+    <div class="pm-topbar-spacer"></div>
+    <div class="pm-topbar-user">{{ user.username }} &mdash; {{ user.get_role_display }}</div>
+</div>
+
+<!-- Modals (loaded outside sidebar) -->
+{% for project in projects %}
+    {% include 'core/dashbaord/edit_project_modal.html' %}
+    {% include 'core/dashbaord/qa_revision_modal.html' %}
+    {% include 'core/dashbaord/team_lead_reject_modal.html' %}
+{% endfor %}
 
 {% if user.is_superuser or user.role == 'admin' %}
 <!-- Add New Project Modal -->
@@ -49,10 +114,6 @@ Use PM-specific classes for consistent layout
                             <input type="text" name="project_id" class="pm-input form-control" required>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label>Client Name</label>
-                            <input type="text" name="client_name" class="pm-input form-control">
-                        </div>
-                        <div class="col-md-6 mb-3">
                             <label>Assign Date</label>
                             <input type="date" name="assign_date" class="pm-input form-control">
                         </div>
@@ -60,19 +121,14 @@ Use PM-specific classes for consistent layout
                             <label>Due Date</label>
                             <input type="date" name="due_date" class="pm-input form-control">
                         </div>
-
                         <div class="col-md-6 mb-3">
                             <label>Expected Date</label>
                             <input type="date" name="expected_date" class="pm-input form-control">
                         </div>
-                        
                         <div class="col-md-6 mb-3">
                             <label>Project Link</label>
                             <input type="url" name="project_link" class="pm-input form-control" placeholder="https://example.com">
                         </div>
-
-
-
                         <div class="col-md-6 mb-3">
                             <label>Team Lead</label>
                             <select name="team_lead" class="pm-select form-control">
@@ -102,23 +158,6 @@ Use PM-specific classes for consistent layout
                             <label>Project Instructions</label>
                             <textarea name="instructions" class="pm-textarea form-control" placeholder="Enter project instructions here..."></textarea>
                         </div>
-
-                        <div class="col-md-12 mb-3">
-                            <label>Revisions</label>
-                            <textarea name="revisions" class="pm-textarea form-control"></textarea>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label>Progress (%)</label>
-                            <input type="number" name="progress" class="pm-input form-control" value="0">
-                        </div>
-                        <div class="col-md-12 mb-3">
-                            <label>Assign Estimator</label>
-                            <select name="assign_person" multiple class="pm-select form-control employee-select">
-                                {% for emp in all_employees %}
-                                <option value="{{ emp.id }}">{{ emp.username }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
                         <div class="col-md-12 mb-3">
                             <label>Project Files</label>
                             <input type="file" name="project_file" multiple class="pm-input form-control">
@@ -127,11 +166,10 @@ Use PM-specific classes for consistent layout
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="pm-btn pm-btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="pm-btn pm-btn-success">Add Project</button>
+                    <button type="submit" class="pm-btn pm-btn-primary">Add Project</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
 {% endif %}

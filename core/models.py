@@ -26,7 +26,7 @@ class Project(models.Model):
     )
 
     project_name = models.CharField(max_length=255)
-    project_id = models.CharField(max_length=50, unique=True)
+    project_id = models.CharField(max_length=50)
     client_name = models.CharField(max_length=255, blank=True, null=True)
     assign_date = models.DateField()
     due_date = models.DateField()
@@ -125,6 +125,16 @@ class FinalSubmissionFile(models.Model):
         limit_choices_to={'role': 'employee'}  # 👈 Only employees can upload
     )
 
+        # Team Lead uploader (NEW FIELD)
+    team_lead_uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='teamlead_uploads',
+        limit_choices_to={'role': 'team_lead'}
+    )
+
     def __str__(self):
         return f"Final file for {self.project.project_name}"
 
@@ -134,6 +144,7 @@ class EmployeeProjectProgress(models.Model):
     progress = models.PositiveIntegerField(default=0)  # 0-100%
     working_hours = models.FloatField(blank=True, null=True)
     final_submission_link = models.URLField(blank=True, null=True)
+    team_lead_submission_link = models.URLField(blank=True, null=True)
 
     class Meta:
         unique_together = ('project', 'employee')

@@ -6,208 +6,198 @@
     <title>Project Management Portal</title>
     <link rel="stylesheet" href="{% static 'core/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'core/css/project-management.css' %}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 </head>
-<body class="project-management-css">
-    <div class="pm-portal">
-        <!-- Dashboard Wrapper -->
-        <div class="pm-dashboard">
-            <!-- Sidebar -->
-            <div class="pm-sidebar">
-                <h2>PM Portal</h2>
-                <a href="{% url 'logout' %}" class="pm-btn pm-btn-secondary text-center mt-auto">Logout</a>
-            </div>
-            
-            <!-- Main Content -->
-            <div class="pm-main">
-                <!-- Project Header -->
-                {% include 'core/dashbaord/project_header.html' %}
-                
-                <!-- Top Navigation Tabs -->
-                <div class="pm-top-nav">
-                    {% if user.role == 'qa' %}
-                        <a href="?status=qa" class="pm-nav-item {% if active_tab == 'qa' %}active{% endif %}">QA</a>
-                        <a href="?status=revision" class="pm-nav-item {% if active_tab == 'revision' %}active{% endif %}">Revision</a>
-                        <a href="?status=approval" class="pm-nav-item {% if active_tab == 'approval' %}active{% endif %}">Approval</a>
-                        <a href="?status=completed" class="pm-nav-item {% if active_tab == 'completed' %}active{% endif %}">Completed</a>
-                    {% else %}
-                        <a href="?status=active" class="pm-nav-item {% if active_tab == 'active' %}active{% endif %}">Active Projects</a>
-                        <a href="?status=qa" class="pm-nav-item {% if active_tab == 'qa' %}active{% endif %}">QA</a>
-                        <a href="?status=revision" class="pm-nav-item {% if active_tab == 'revision' %}active{% endif %}">Revision</a>
-                        <a href="?status=approval" class="pm-nav-item {% if active_tab == 'approval' %}active{% endif %}">Approval</a>
-                        <a href="?status=completed" class="pm-nav-item {% if active_tab == 'completed' %}active{% endif %}">Completed</a>
-                    {% endif %}
-                </div>
-                
-                <!-- Content Area -->
-                <div class="pm-content">
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-hover pm-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Project Name</th>
-                                    <th>Project ID</th>
-                                    {% if user.is_superuser or user.role == 'admin' %}<th>Client</th>{% endif %}
-                                    <th>Assign Date</th>
-                                    {% if user.is_superuser or user.role == 'admin' or user.role == 'team_lead' %}<th>Due Date</th>{% endif %}
-                                    <th>Expected Date</th>
-                                    <th>Team Lead</th>
-                                    <th>QA Person</th>
-                                    <th>Scope</th>
-                                    <th>Progress (%)</th>
-                                    <th>Working Hours</th>
-                                    <th>Assigned Estimator</th>
-                                    <!-- <th>Status</th> -->
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for project in projects %}
-                                <tr 
-                                    {% if project.progress == 100 and not project.team_lead_approved %} 
-                                        class="table-warning" style="background-color: #fff3cd; font-weight: 500;"
-                                    {% elif user.is_superuser or user.role == 'admin' or user.role == 'team_lead' %}
-                                        {% if project.days_left is not None and project.days_left <= 2 and project.days_left >= 0 %} 
-                                            class="table-danger" style="background-color: #f8d7da; font-weight: 600;"
-                                        {% elif project.days_left is not None and project.days_left == 3 %} 
-                                            class="table-warning" style="background-color: #fff3cd; font-weight: 500;"
-                                        {% endif %}
-                                    {% endif %}
-                                >
-                                    <td>{{ forloop.counter }}</td>
-                                    <td>{{ project.project_name }}</td>
-                                    <td>{{ project.project_id }}</td>
-                                    {% if user.is_superuser or user.role == 'admin' %}<td>
-                                        {{ project.client_name|default:"-" }}</td>{% endif %}
-                                    <td>{{ project.assign_date }}</td>
-                                    {% if user.is_superuser or user.role == 'admin' or user.role == 'team_lead' %}
-                                    <td class="{% if project.days_left == 1 %}due-danger{% endif %}
-                                    {% if project.days_left == 2 %}due-warning{% endif %}">
-                                        {{ project.due_date }}
-                                    </td>
-                                    {% endif %}
-                                    <td>{{ project.expected_date|default:"-" }}</td>
-                                    <td>{{ project.team_lead.username }}</td>
-                                    <td>{{ project.qa_person.username|default:"-" }}</td>
-                                    <td>{{ project.projectdetail.scope|default:"-" }}</td>
-                                    <td>
-                                        <!-- Overall Project Progress -->
-                                        <strong>{{ project.progress|default:"0" }}%</strong>
-                                        <!-- Individual Employee Progress -->
-                                        <ul style="list-style:none; padding-left:0; margin:0;">
-                                            {% for ep in project.employee_progresses.all %}
-                                            <li>{{ ep.employee.username }}: {{ ep.progress }}%</li>
-                                            {% empty %}
-                                            <li>No progress yet</li>
-                                            {% endfor %}
-                                        </ul>
-                                    </td>
-                                    <td>
-                                        <!-- Total working hours for the project -->
-                                        <strong>Total: {{ project.total_working_hours|default:"0" }} hrs</strong>
+<body>
+<div class="pm-v2">
 
-                                        <!-- Individual employee working hours -->
-                                        <ul style="list-style:none; padding-left:0; margin:0;">
-                                            {% for ep in project.employee_progresses.all %}
-                                                <li>
-                                                    {{ ep.employee.username }}: {{ ep.working_hours|default:"0" }} hrs
-                                                </li>
-                                            {% empty %}
-                                                <li>No working hours yet</li>
-                                            {% endfor %}
-                                        </ul>
-                                    </td>
+    <!-- ===== HEADER + SIDEBAR (injected via include) ===== -->
+    {% include 'core/dashbaord/project_header.html' %}
 
-                                    <td>
-                                        {% for emp in project.projectdetail.assign_person.all %}
-                                        {{ emp.username }}{% if not forloop.last %}, {% endif %}
-                                        {% empty %}-{% endfor %}
-                                    </td>
-                                    <!-- {% if user.role == 'admin' or user.role == 'team_lead' or user.is_superuser %}
-                                    <td>
-                                        <form method="post" class="d-inline">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="change_status">
-                                            <input type="hidden" name="project_id" value="{{ project.id }}">
-                                            <select name="status" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
-                                                <option value="active" {% if project.status|default:'' == 'active' %}selected{% endif %}>Active</option>
-                                                <option value="approval" {% if project.status|default:'' == 'approval' %}selected{% endif %}>Approval</option>
-                                                <option value="revision" {% if project.status|default:'' == 'revision' %}selected{% endif %}>Revision</option>
-                                                <option value="qa" {% if project.status|default:'' == 'qa' %}selected{% endif %}>QA</option>
-                                                <option value="completed" {% if project.status|default:'' == 'completed' %}selected{% endif %}>Completed</option>
-                                            </select>
-                                        </form>
-                                    </td>
-                                    {% else %}
-                                    <td></td>
-                                    {% endif %} -->
-                                    <td class="d-flex flex-column gap-1">
-                                        <a href="{% url 'project_detail' project.id %}"
-                                            class="pm-btn pm-btn-primary btn-sm">View</a>
-                                        
-                                        {% if user.is_superuser or user.role in 'admin team_lead employee' %}
-                                        <button class="pm-btn pm-btn-success btn-sm" data-bs-toggle="modal"
-                                            data-bs-target="#editProjectModal{{ project.id }}">Edit</button>
-                                        {% endif %}
-                                        
-                                        <!-- Team Lead Approve/Reject Buttons -->
-                                        {% if user.role == 'team_lead' and project.progress == 100 and not project.team_lead_approved and project.team_lead == user %}
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="pm-main">
+        <div class="pm-content">
+            <div class="pm-table-wrap">
+                <table class="pm-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Project Name</th>
+                            <th>Project ID</th>
+                            <th>Assign Date</th>
+                            {% if user.is_superuser or user.role == 'admin' %}<th>Due Date</th>{% endif %}
+                            <th>Expected Date</th>
+                            <th>Team Lead</th>
+                            <th>QA Person</th>
+                            <th>Scope</th>
+                            <th>Progress (%)</th>
+                            <th>Working Hours</th>
+                            <th>Assigned Estimator</th>
+                            <th>Actions</th>
+                            {% if has_approval_actions %}
+                            <th>Approval Actions</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in projects %}
+                        <tr
+                            {% if project.progress == 100 and not project.team_lead_approved %}
+                                class="table-warning"
+                            {% elif user.is_superuser or user.role == 'admin' or user.role == 'team_lead' %}
+                                {% if project.days_left is not None and project.days_left <= 2 and project.days_left >= 0 %}
+                                    class="table-danger"
+                                {% elif project.days_left is not None and project.days_left == 3 %}
+                                    class="table-warning"
+                                {% endif %}
+                            {% endif %}
+                        >
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ project.project_name }}</td>
+                            <td>{{ project.project_id }}</td>
+                            <td>{{ project.assign_date }}</td>
+                            {% if user.is_superuser or user.role == 'admin' %}
+                            <td style="{% if project.days_left == 0 %}background-color:red; color:white; font-weight:bold;{% endif %}">
+                                {{ project.due_date }}
+                            </td>
+                            {% endif %}
+                            <td style="{% if project.expected_days_left == 0 %}background-color:green; color:white; font-weight:bold;{% endif %}">
+                                {{ project.expected_date|default:"-" }}
+                            </td>
+                            <td>{{ project.team_lead.username }}</td>
+                            <td>{{ project.qa_person.username|default:"-" }}</td>
+                            <td>{{ project.projectdetail.scope|default:"-" }}</td>
+                            <td>
+                                <strong>{{ project.progress|default:"0" }}%</strong>
+                                <ul>
+                                    {% for ep in project.employee_progresses.all %}
+                                    <li>{{ ep.employee.username }}: {{ ep.progress }}%</li>
+                                    {% empty %}
+                                    <li>No progress yet</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                            <td>
+                                <strong>Total: {{ project.total_working_hours|default:"0" }} hrs</strong>
+                                <ul>
+                                    {% for ep in project.employee_progresses.all %}
+                                    <li>{{ ep.employee.username }}: {{ ep.working_hours|default:"0" }} hrs</li>
+                                    {% empty %}
+                                    <li>No working hours yet</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                            <td>
+                                <ul>
+                                    {% for emp in project.projectdetail.assign_person.all %}
+                                    <li>{{ emp.username }}</li>
+                                    {% empty %}
+                                    <li>-</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+
+                            <!-- STANDARD ACTIONS -->
+                            <td class="standard-actions-cell">
+                                <div class="standard-btn-group">
+                                    <a href="{% url 'project_detail' project.id %}" class="pm-btn pm-btn-primary">View</a>
+                                    {% if user.is_superuser or user.role in 'admin team_lead employee' %}
+                                    <button class="pm-btn pm-btn-success" data-bs-toggle="modal"
+                                        data-bs-target="#editProjectModal{{ project.id }}">Edit</button>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                            <!-- APPROVAL ACTIONS -->
+                            {% if has_approval_actions %}
+                            <td class="approval-actions-cell">
+                                <div class="approval-btn-group">
+                                    {% if user.role == 'team_lead' and project.progress == 100 and not project.team_lead_approved and project.team_lead == user %}
                                         <form method="post" class="d-inline" onsubmit="return confirm('Approve this project and send to QA?');">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="team_lead_approve">
                                             <input type="hidden" name="project_id" value="{{ project.id }}">
-                                            <button type="submit" class="pm-btn btn-sm" style="background-color: #28a745; color: white;">
-                                                ✅ Approve
-                                            </button>
+                                            <button type="submit" class="approval-btn approval-btn-approve">✅ Approve</button>
                                         </form>
-                                        <button class="pm-btn btn-sm" style="background-color: #dc3545; color: white;" 
-                                                data-bs-toggle="modal" data-bs-target="#teamLeadRejectModal{{ project.id }}">
+                                        <button class="approval-btn approval-btn-reject"
+                                            data-bs-toggle="modal" data-bs-target="#teamLeadRejectModal{{ project.id }}">
                                             ❌ Not Approve
                                         </button>
-                                        {% endif %}
-                                        
-                                        <!-- QA Approve Button -->
-                                        {% if user.role == 'qa' and project.team_lead_approved and not project.qa_approved and project.qa_person == user %}
+
+                                    {% elif user.role == 'qa' and project.team_lead_approved and not project.qa_approved and project.qa_person == user %}
                                         <form method="post" class="d-inline" onsubmit="return confirm('Approve this project and move to Approval tab?');">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="qa_approve">
                                             <input type="hidden" name="project_id" value="{{ project.id }}">
-                                            <button type="submit" class="pm-btn btn-sm" style="background-color: #17a2b8; color: white;">
-                                                ✅ QA Approve
-                                            </button>
+                                            <button type="submit" class="approval-btn approval-btn-qa">✅ QA Approve</button>
                                         </form>
-                                        <button class="pm-btn btn-sm" style="background-color: #dc3545; color: white;" 
-                                                data-bs-toggle="modal" data-bs-target="#qaRevisionModal{{ project.id }}">
+                                        <button class="approval-btn approval-btn-reject"
+                                            data-bs-toggle="modal" data-bs-target="#qaRevisionModal{{ project.id }}">
                                             ❌ Send to Revision
                                         </button>
+
+                                    {% elif user.is_superuser or user.role == 'admin' %}
+                                        {% if project.qa_approved and project.status != 'completed' %}
+                                            <form method="post" class="d-inline" onsubmit="return confirm('Mark this project as completed?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="mark_complete">
+                                                <input type="hidden" name="project_id" value="{{ project.id }}">
+                                                <button type="submit" class="approval-btn approval-btn-complete">✅ Mark Complete</button>
+                                            </form>
+                                        {% else %}
+                                            <span class="text-muted small">—</span>
                                         {% endif %}
-                                    </td>
-                                </tr>
-                                {% include 'core/dashbaord/edit_project_modal.html' with project=project %}
-                                {% include 'core/dashbaord/qa_revision_modal.html' with project=project %}
-                                {% include 'core/dashbaord/team_lead_reject_modal.html' with project=project %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+
+                                    {% else %}
+                                        <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-    
-    <!-- jQuery FIRST (only once!) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    
-    <!-- Your local Bootstrap -->
-    <script src="{% static 'core/bootstrap.bundle.min.js' %}"></script>
-    
-    <!-- Select2 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    
-    <!-- Your custom JS -->
-    <script src="{% static 'core/js/project.js' %}"></script>
-    
+
+</div><!-- /.pm-v2 -->
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'core/bootstrap.bundle.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'core/js/project.js' %}"></script>
+
+<script>
+    (function () {
+        var sidebar = document.getElementById('pmSidebar');
+        var overlay = document.getElementById('pmSidebarOverlay');
+        var hamburger = document.getElementById('pmHamburger');
+        var closeBtn = document.getElementById('pmSidebarClose');
+
+        function openSidebar() {
+            sidebar.classList.add('open');
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeSidebar() {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        hamburger.addEventListener('click', openSidebar);
+        closeBtn.addEventListener('click', closeSidebar);
+        overlay.addEventListener('click', closeSidebar);
+
+        // Close sidebar on Escape key
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeSidebar();
+        });
+    })();
+</script>
 </body>
 </html>

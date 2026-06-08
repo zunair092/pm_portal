@@ -204,24 +204,62 @@ def project_management_view(request):
                     notify(u, f"Project '{project.project_name}' has been updated by Admin.")
 
             # === TEAM LEAD ===
+           # === TEAM LEAD ===
             elif user.role == 'team_lead':
                 if project.team_lead != user:
                     return HttpResponseForbidden()
-
+                
                 assign_ids = request.POST.getlist('assign_person')
                 if assign_ids:
                     detail.assign_person.set(User.objects.filter(id__in=assign_ids))
-
+                
                 comments_team_lead = request.POST.get('comments_team_lead')
                 if comments_team_lead is not None:
                     detail.comments_team_lead = comments_team_lead
-
+                
                 detail.save()
 
-                # Notify assigned employees
+                # 🔥 FIXED - Single Team Lead submission link for ALL employees
+                team_lead_link = request.POST.get('team_lead_submission_link')
+                if team_lead_link:
+                    # Apply the same link to ALL assigned employees
+                    for emp in detail.assign_person.all():
+                        obj, created = EmployeeProjectProgress.objects.get_or_create(
+                            project=project,
+                            employee=emp
+                        )
+                        obj.team_lead_submission_link = team_lead_link
+                        obj.save()
+                    
+                    # Notify all employees once
+                    for emp in detail.assign_person.all():
+                        notify(emp, f"🔗 Team Lead {user.username} added a submission link for project '{project.project_name}'")
+                
+                # Team Lead final file upload
+                uploaded_files = request.FILES.getlist('final_files')
+                
+                if uploaded_files:
+                    for file in uploaded_files:
+                        try:
+                            FinalSubmissionFile.objects.create(
+                                project=project,
+                                file=file,
+                                team_lead_uploaded_by=user
+                            )
+                            
+                            # Notify assigned employees
+                            for emp in detail.assign_person.all():
+                                notify(emp, f"📁 Team Lead {user.username} uploaded file '{file.name}' for project '{project.project_name}'")
+                        except Exception as e:
+                            messages.error(request, f"Error uploading file {file.name}: {str(e)}")
+                    
+                    messages.success(request, f"Project updated successfully. {len(uploaded_files)} file(s) uploaded.")
+                else:
+                    messages.success(request, "Project updated successfully.")
+                
+                # Notify assigned employees about the update
                 for emp in detail.assign_person.all():
                     notify(emp, f"Team Lead {user.username} updated project '{project.project_name}'")
-
            # === EMPLOYEE ===
             elif user.role == 'employee':
                 if user not in detail.assign_person.all():
@@ -438,40 +476,122 @@ def project_management_view(request):
                 return redirect('project_management')
             else:
                 return HttpResponseForbidden("Only assigned QA person can send project to revision.")
+            
+            # === MARK AS COMPLETE (Admin only) ===
+        if action == 'mark_complete':
+            project = get_object_or_404(Project, id=request.POST.get('project_id'))
+            
+            if user.is_superuser or user.role == 'admin':
+                if not project.qa_approved:
+                    messages.error(request, "Project must be QA approved before marking as complete.")
+                    return redirect('project_management')
+                
+                project.status = 'completed'
+                project.save()
+                
+                messages.success(request, f"Project '{project.project_name}' marked as completed.")
+                
+                # Notify Team Lead
+                if project.team_lead:
+                    notify(project.team_lead, f"✅ Project '{project.project_name}' has been marked as completed by Admin.")
+                
+                # Notify QA Person
+                if project.qa_person:
+                    notify(project.qa_person, f"✅ Project '{project.project_name}' has been marked as completed.")
+                
+                # Notify all assigned employees
+                for emp in project.projectdetail.assign_person.all():
+                    notify(emp, f"🎉 Project '{project.project_name}' has been completed!")
+                
+                return redirect('project_management')
+            else:
+                return HttpResponseForbidden("Only Admin can mark projects as complete.")
     # Calculate days left for each project and convert to list
-    projects = list(projects)  # 🔥 Convert QuerySet to list FIRST
+    # 🔥 OPTIMIZED: Fetch all working hours in ONE query instead of per-project loop
+    from django.db.models import Sum
+    projects = projects.select_related('team_lead', 'qa_person').prefetch_related(
+        'projectdetail__assign_person'
+    )
+    
+    # Get all working hours in a single DB query
+    hours_map = {}
+    for ep in EmployeeProjectProgress.objects.filter(project__in=projects).values('project_id').annotate(total=Sum('working_hours')):
+        hours_map[ep['project_id']] = ep['total'] or 0
+
+    projects = list(projects)
+    from django.utils.timezone import localdate
+    today = localdate()  # Uses your Django TIME_ZONE setting (PKT)
+
     for p in projects:
         if p.due_date:
-            p.days_left = (p.due_date - date.today()).days
+            p.days_left = (p.due_date - today).days
         else:
             p.days_left = None
+        p.total_working_hours = hours_map.get(p.id, 0)
+        p.expected_days_left = (p.expected_date - today).days if p.expected_date else None
 
-        # Calculate total working hours per project
-        total_hours = 0
-        for ep in EmployeeProjectProgress.objects.filter(project=p):
-            if ep.working_hours:
-                total_hours += ep.working_hours
-        p.total_working_hours = total_hours
+    def sort_priority(p):
+        due = p.days_left
+        exp = p.expected_days_left
 
+        def score(days):
+            if days is None:
+                return float('inf')     # no date → bottom
+            if days < 0:
+                return float('inf')     # past date → bottom
+            return days                 # 0 = today (top), then 1, 2, 3...
 
+        return min(score(due), score(exp))
 
-    # 🔥 SORT PROJECTS BY PRIORITY (fewer days left = higher priority)
-    # Projects with no due_date go to the end
-    projects = sorted(projects, key=lambda p: (
-        p.days_left is None,  # None values go last
-        p.days_left if p.days_left is not None else float('inf')  # Sort by days_left ascending
-    ))
-
+    projects = sorted(projects, key=sort_priority)
     
+    # 🔥 NEW: Calculate if there are any projects needing approval from current user
+    has_approval_actions = False
+    for p in projects:
+        # Check if any project needs approval from current user
+        if user.role == 'team_lead' and p.progress == 100 and not p.team_lead_approved and p.team_lead == user:
+            has_approval_actions = True
+            break
+        elif user.role == 'qa' and p.team_lead_approved and not p.qa_approved and p.qa_person == user:
+            has_approval_actions = True
+            break
+        elif (user.is_superuser or user.role == 'admin') and p.qa_approved and p.status != 'completed':
+            has_approval_actions = True
+            break
+    
+    # 🔥 Calculate counts for each status tab
+    # Get all projects for the user (before filtering by active_tab)
+    if user.is_superuser or user.role == 'admin':
+        all_user_projects = Project.objects.all()
+    elif user.role == 'team_lead':
+        all_user_projects = Project.objects.filter(team_lead=user)
+    elif user.role == 'qa':
+        all_user_projects = Project.objects.filter(qa_person=user)
+    else:  # employee
+        all_user_projects = Project.objects.filter(projectdetail__assign_person=user)
 
+    # Count projects in each status
+    active_count = all_user_projects.filter(status='active').count()
+    qa_count = all_user_projects.filter(status='qa').count()
+    revision_count = all_user_projects.filter(status='revision').count()
+    approval_count = all_user_projects.filter(status='approval').count()
+    completed_count = all_user_projects.filter(status='completed').count()
+    
     return render(request, 'core/dashbaord/project_management.html', {
         'projects': projects,
         'all_team_leads': User.objects.filter(role='team_lead'),
         'all_employees': User.objects.filter(role='employee'),
-        'all_qa': User.objects.filter(role='qa'),  # 🔥 NEW
+        'all_qa': User.objects.filter(role='qa'),
         'user': user,
         'query': query,
         'active_tab': active_tab,
+        'has_approval_actions': has_approval_actions,
+        # 🔥 Add counts
+        'active_count': active_count,
+        'qa_count': qa_count,
+        'revision_count': revision_count,
+        'approval_count': approval_count,
+        'completed_count': completed_count,
     })
 
 

@@ -122,6 +122,46 @@
                             <label>Comments</label>
                             <textarea name="comments_team_lead" class="pm-textarea form-control">{{ project.projectdetail.comments_team_lead }}</textarea>
                         </div>
+
+                        <!-- 🔥 NEW - Team Lead Submission Links for Each Employee -->
+                        <!-- 🔥 FIXED - Single Team Lead Submission Link for ALL Employees -->
+                        <div class="col-md-12 mb-3">
+                            <label><strong>Team Lead Submission Link (For All Employees)</strong></label>
+                            <input 
+                                type="url" 
+                                class="form-control" 
+                                id="team_lead_submission_link" 
+                                name="team_lead_submission_link" 
+                                placeholder="https://example.com/submission"
+                                value="{% if project.employee_progresses.first %}{{ project.employee_progresses.first.team_lead_submission_link|default:'' }}{% endif %}"
+                            >
+                            <small class="text-muted">This link will be shared with all assigned employees</small>
+                        </div>
+
+                        <div class="col-md-12 mb-3">
+                            <label>Upload Team Lead Files</label>
+                            
+                            {% with team_lead_files=project.final_files.all %}
+                                {% if team_lead_files %}
+                                    <div class="existing-files mb-2">
+                                        <strong>Existing Files:</strong>
+                                        {% for f in team_lead_files %}
+                                            {% if f.team_lead_uploaded_by %}
+                                                <div class="d-flex align-items-center mb-1 p-2 bg-light rounded">
+                                                    <i class="fas fa-file me-2"></i>
+                                                    <a href="{{ f.file.url }}" target="_blank" class="me-auto">{{ f.file.name|slice:"18:" }}</a>
+                                                    <small class="text-muted">{{ f.file.size|filesizeformat }}</small>
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted small">No Team Lead files uploaded yet.</p>
+                                {% endif %}
+                            {% endwith %}
+                            
+                            <input type="file" name="final_files" multiple class="pm-input form-control">
+                        </div>
                         {% endif %}
 
                         {% if user.role == 'employee' %}
