@@ -16,9 +16,6 @@ $(document).ready(function () {
     });
 });
 
-// =============================================
-// WebSocket - Real-Time Notification System
-// =============================================
 console.log("Setting up WebSocket...");
 const wsScheme = window.location.protocol === "https:" ? "wss://" : "ws://";
 const wsPath = wsScheme + window.location.host + "/ws/notifications/";
@@ -30,26 +27,24 @@ function connect() {
 
     socket.onopen = function () {
         console.log("WebSocket connected for notifications.");
-        isReloading = false; // reset on reconnect
+        isReloading = false;
     };
 
     socket.onmessage = function (e) {
         const data = JSON.parse(e.data);
         console.log("Received WebSocket message:", data);
 
-        // ── project_added always wins — check BEFORE isReloading ──
+        // project_added always wins — force reload even if isReloading
         if (data.type === "project_added") {
             const projectName = data.project_name ? `"${data.project_name}"` : "A new project";
             const clientInfo = data.client_name ? ` (${data.client_name})` : "";
             showNotification(`🚀 Project Updated: ${projectName}${clientInfo}`, "primary");
-            scheduleReload(1500);
+            scheduleReload(1500, true); // force = true
             return;
         }
 
-        // Prevent stacking multiple reloads
         if (isReloading) return;
 
-        // ── Personal notification ──
         if (data.type === "notification") {
             console.log("Notification received:", data.message);
             if (data.message) showNotification(data.message, "info");
@@ -57,7 +52,6 @@ function connect() {
             return;
         }
 
-        // ── Backward compatibility ──
         if (data.message && !data.type) {
             showNotification(data.message, "info");
             scheduleReload(2000);
@@ -66,7 +60,7 @@ function connect() {
 
     socket.onclose = function (e) {
         console.log("Socket closed. Reconnecting in 3 seconds...", e.reason);
-        isReloading = false; // reset so reconnect works cleanly
+        isReloading = false;
         setTimeout(function () {
             connect();
         }, 3000);
@@ -78,10 +72,13 @@ function connect() {
     };
 }
 
-// ── Schedule a page reload with a "Refreshing..." banner ──
-function scheduleReload(delayMs) {
-    if (isReloading) return;
+function scheduleReload(delayMs, force = false) {
+    if (isReloading && !force) return;
     isReloading = true;
+
+    // Remove any existing banner
+    const existing = document.getElementById("ws-refresh-banner");
+    if (existing) existing.remove();
 
     const banner = document.createElement("div");
     banner.id = "ws-refresh-banner";
@@ -113,7 +110,6 @@ function scheduleReload(delayMs) {
     }, delayMs);
 }
 
-// ── Show in-page toast notification ──
 function showNotification(message, type = "primary") {
     if (Notification.permission === "granted") {
         const desktopNote = new Notification("PM Portal Update", {
