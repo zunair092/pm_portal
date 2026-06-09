@@ -125,7 +125,7 @@ def project_management_view(request):
                 due_date=due_date,
                 expected_date = expected,
                 project_link=request.POST.get('project_link'),
-                team_lead=User.objects.get(id=request.POST.get('team_lead')),
+                team_lead=User.objects.get(id=request.POST.get('team_lead')) if request.POST.get('team_lead') else None,
                 qa_person=User.objects.get(id=request.POST.get('qa_person')) if request.POST.get('qa_person') else None,
                 progress=request.POST.get('progress') or 0,
                 status='active'
