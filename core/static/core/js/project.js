@@ -20,44 +20,44 @@ $(document).ready(function () {
 // WebSocket - Real-Time Notification System
 // =============================================
 console.log("Setting up WebSocket...");
-
 const wsScheme = window.location.protocol === "https:" ? "wss://" : "ws://";
 const wsPath = wsScheme + window.location.host + "/ws/notifications/";
 let socket = null;
-let isReloading = false; // Prevent multiple simultaneous reloads
+let isReloading = false;
 
 function connect() {
     socket = new WebSocket(wsPath);
 
     socket.onopen = function () {
         console.log("WebSocket connected for notifications.");
+        isReloading = false; // reset on reconnect
     };
 
     socket.onmessage = function (e) {
         const data = JSON.parse(e.data);
         console.log("Received WebSocket message:", data);
 
-        // Prevent stacking multiple reloads
-        if (isReloading) return;
-
-        // ── New project added broadcast (all users) ──
+        // ── project_added always wins — check BEFORE isReloading ──
         if (data.type === "project_added") {
             const projectName = data.project_name ? `"${data.project_name}"` : "A new project";
             const clientInfo = data.client_name ? ` (${data.client_name})` : "";
-            showNotification(`🚀 New Project Added: ${projectName}${clientInfo}`, "primary");
+            showNotification(`🚀 Project Updated: ${projectName}${clientInfo}`, "primary");
             scheduleReload(1500);
             return;
         }
 
-        // ── Personal notification (status change, approval, progress update, etc.) ──
+        // Prevent stacking multiple reloads
+        if (isReloading) return;
+
+        // ── Personal notification ──
         if (data.type === "notification") {
             console.log("Notification received:", data.message);
-            showNotification(data.message, "info");
+            if (data.message) showNotification(data.message, "info");
             scheduleReload(2000);
             return;
         }
 
-        // ── Backward compatibility with old message format ──
+        // ── Backward compatibility ──
         if (data.message && !data.type) {
             showNotification(data.message, "info");
             scheduleReload(2000);
@@ -66,6 +66,7 @@ function connect() {
 
     socket.onclose = function (e) {
         console.log("Socket closed. Reconnecting in 3 seconds...", e.reason);
+        isReloading = false; // reset so reconnect works cleanly
         setTimeout(function () {
             connect();
         }, 3000);
@@ -82,7 +83,6 @@ function scheduleReload(delayMs) {
     if (isReloading) return;
     isReloading = true;
 
-    // Show subtle refresh banner at bottom center
     const banner = document.createElement("div");
     banner.id = "ws-refresh-banner";
     banner.style.cssText = `
@@ -115,7 +115,6 @@ function scheduleReload(delayMs) {
 
 // ── Show in-page toast notification ──
 function showNotification(message, type = "primary") {
-    // ── Desktop push notification (if permitted) ──
     if (Notification.permission === "granted") {
         const desktopNote = new Notification("PM Portal Update", {
             body: message,
@@ -128,9 +127,7 @@ function showNotification(message, type = "primary") {
         };
     }
 
-    // ── In-page toast ──
     const container = document.getElementById("notification-container") || createAlertContainer();
-
     const colorMap = {
         primary: { border: "#3b82f6", bg: "#eff6ff", text: "#1e40af", icon: "🔔" },
         info:    { border: "#6366f1", bg: "#eef2ff", text: "#3730a3", icon: "ℹ️"  },
@@ -139,7 +136,6 @@ function showNotification(message, type = "primary") {
         danger:  { border: "#ef4444", bg: "#fef2f2", text: "#991b1b", icon: "❌" },
     };
     const c = colorMap[type] || colorMap.primary;
-
     const toast = document.createElement("div");
     toast.style.cssText = `
         background: ${c.bg};
@@ -172,7 +168,6 @@ function showNotification(message, type = "primary") {
     toast.setAttribute("data-ws-toast", "true");
     container.appendChild(toast);
 
-    // Auto-dismiss after 7 seconds
     setTimeout(() => {
         if (toast && toast.parentNode) {
             toast.style.animation = "wsSlideOut 0.3s ease";
@@ -181,7 +176,6 @@ function showNotification(message, type = "primary") {
     }, 7000);
 }
 
-// ── Create fixed toast container ──
 function createAlertContainer() {
     const container = document.createElement("div");
     container.id = "notification-container";
@@ -198,7 +192,6 @@ function createAlertContainer() {
     return container;
 }
 
-// ── Inject keyframe animations ──
 (function injectStyles() {
     const style = document.createElement("style");
     style.textContent = `
@@ -218,10 +211,8 @@ function createAlertContainer() {
     document.head.appendChild(style);
 })();
 
-// ── Request desktop notification permission on load ──
 if (Notification.permission !== "granted" && Notification.permission !== "denied") {
     Notification.requestPermission();
 }
 
-// ── Boot WebSocket ──
 connect();
