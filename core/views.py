@@ -1,3 +1,4 @@
+import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
 from django.contrib import messages
@@ -5,8 +6,30 @@ from django.http import HttpResponseForbidden
 from django.utils import timezone
 from .models import Project, User, ProjectDetail, ProjectFile, FinalSubmissionFile, EmployeeProjectProgress
 from .forms import CustomUserCreationForm, CustomAuthenticationForm
-from django.db.models import Q 
+from django.db.models import Q
 from .utils import notify
+
+
+# =============================================
+# Helpers
+# =============================================
+
+def broadcast_update(project_name="", client_name=""):
+    """
+    Broadcast a real-time 'project_added' event to the global
+    'project_updates' channel group so every connected user reloads.
+    """
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        "project_updates",
+        {
+            "type": "project_added",
+            "project_name": project_name,
+            "client_name": client_name,
+        }
+    )
 
 
 # ------------------- Signup -------------------
@@ -28,7 +51,6 @@ def signup_view(request):
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('project_management')
-
     if request.method == 'POST':
         form = CustomAuthenticationForm(request, data=request.POST)
         if form.is_valid():
@@ -36,7 +58,6 @@ def login_view(request):
             return redirect('project_management')
     else:
         form = CustomAuthenticationForm()
-
     return render(request, 'core/forms/login.html', {'form': form})
 
 
@@ -48,7 +69,6 @@ def logout_view(request):
 
 # ------------------- Project Management -------------------
 def project_management_view(request):
-    from .utils import notify  # Ensure notify is imported
     from datetime import date
 
     user = request.user
@@ -83,7 +103,9 @@ def project_management_view(request):
     def parse_date(date_str, default=None):
         return date_str if date_str else default
 
-    # ---- POST HANDLING ----
+    # ================================================================
+    # POST HANDLING
+    # ================================================================
     if request.method == 'POST':
         action = request.POST.get('action')
 
@@ -94,19 +116,19 @@ def project_management_view(request):
 
             if user.is_superuser or user.role in ['admin', 'team_lead']:
                 project.status = new_status
-
-                # Auto move to completed if progress = 100 and status manually set to completed
                 if project.progress == 100 and new_status == 'completed':
                     project.status = 'completed'
-
                 project.save()
+
                 messages.success(request, f"Status changed to {new_status}.")
 
-                # --- NOTIFICATIONS ---
+                # Notifications
                 notify(project.team_lead, f"Status of project '{project.project_name}' changed to {new_status}")
                 for emp in project.projectdetail.assign_person.all():
                     notify(emp, f"Status of project '{project.project_name}' changed to {new_status}")
 
+                # Broadcast real-time reload to all users
+                broadcast_update(project.project_name, project.client_name)
                 return redirect('project_management')
 
             return HttpResponseForbidden("Not allowed")
@@ -114,8 +136,8 @@ def project_management_view(request):
         # ---------- ADD PROJECT (Admin only) ----------
         if action == 'add_project' and (user.is_superuser or user.role == 'admin'):
             assign_date = parse_date(request.POST.get('assign_date'), timezone.now().date())
-            due_date = parse_date(request.POST.get('due_date'), timezone.now().date())
-            expected = parse_date(request.POST.get('expected_date'), None)
+            due_date    = parse_date(request.POST.get('due_date'),    timezone.now().date())
+            expected    = parse_date(request.POST.get('expected_date'), None)
 
             project = Project.objects.create(
                 project_name=request.POST.get('project_name'),
@@ -123,7 +145,7 @@ def project_management_view(request):
                 client_name=request.POST.get('client_name'),
                 assign_date=assign_date,
                 due_date=due_date,
-                expected_date = expected,
+                expected_date=expected,
                 project_link=request.POST.get('project_link'),
                 team_lead=User.objects.get(id=request.POST.get('team_lead')) if request.POST.get('team_lead') else None,
                 qa_person=User.objects.get(id=request.POST.get('qa_person')) if request.POST.get('qa_person') else None,
@@ -148,52 +170,44 @@ def project_management_view(request):
                 ProjectFile.objects.create(project_detail=detail, file=f)
 
             messages.success(request, "Project added successfully.")
-            # --- NOTIFICATIONS ---
+
+            # Personal notifications
             if project.team_lead:
                 notify(project.team_lead, f"You are assigned as Team Lead for project '{project.project_name}'")
             for emp in assigned_users:
                 notify(emp, f"You have been assigned to project '{project.project_name}'")
 
-            # --- BROADCAST to all users to refresh ---
-            from channels.layers import get_channel_layer
-            from asgiref.sync import async_to_sync
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                "project_updates",
-                {
-                    "type": "project_added",
-                    "project_name": project.project_name,
-                }
-            )
+            # Broadcast real-time reload to ALL connected users
+            broadcast_update(project.project_name, project.client_name)
             return redirect('project_management')
 
         # ---------- UPDATE PROJECT ----------
         if action == 'update_project':
             project = get_object_or_404(Project, id=request.POST.get('project_id'))
             detail, _ = ProjectDetail.objects.get_or_create(project=project)
-
             notified_users = []
 
             # === ADMIN ===
             if user.is_superuser or user.role == 'admin':
-                project.project_name = request.POST.get('project_name')
-                project.client_name = request.POST.get('client_name')
-                project.assign_date = parse_date(request.POST.get('assign_date'), project.assign_date)
-                project.due_date = parse_date(request.POST.get('due_date'), project.due_date)
-                project.expected_date = parse_date(request.POST.get('expected_date'), project.expected_date)
-                project.project_link = request.POST.get('project_link') 
-                project.team_lead = User.objects.get(id=request.POST.get('team_lead'))
-                qa_person_id = request.POST.get('qa_person')
-                project.qa_person = User.objects.get(id=qa_person_id) if qa_person_id else None
-                project.progress = request.POST.get('progress') or project.progress
+                project.project_name   = request.POST.get('project_name')
+                project.client_name    = request.POST.get('client_name')
+                project.assign_date    = parse_date(request.POST.get('assign_date'),    project.assign_date)
+                project.due_date       = parse_date(request.POST.get('due_date'),       project.due_date)
+                project.expected_date  = parse_date(request.POST.get('expected_date'),  project.expected_date)
+                project.project_link   = request.POST.get('project_link')
+                project.team_lead      = User.objects.get(id=request.POST.get('team_lead'))
+                qa_person_id           = request.POST.get('qa_person')
+                project.qa_person      = User.objects.get(id=qa_person_id) if qa_person_id else None
+                project.progress       = request.POST.get('progress') or project.progress
                 project.save()
 
-                detail.scope = request.POST.get('scope')
-                detail.comments = request.POST.get('comments')
-                detail.instructions = request.POST.get('instructions')
-                detail.revisions = request.POST.get('revisions')
-                detail.time_estimated = request.POST.get('time_estimated') or 0
+                detail.scope              = request.POST.get('scope')
+                detail.comments           = request.POST.get('comments')
+                detail.instructions       = request.POST.get('instructions')
+                detail.revisions          = request.POST.get('revisions')
+                detail.time_estimated     = request.POST.get('time_estimated') or 0
                 detail.comments_team_lead = request.POST.get('comments_team_lead')
+
                 assign_persons = User.objects.filter(id__in=request.POST.getlist('assign_person'))
                 detail.assign_person.set(assign_persons)
                 detail.save()
@@ -214,41 +228,38 @@ def project_management_view(request):
                 for u in set(notified_users):
                     notify(u, f"Project '{project.project_name}' has been updated by Admin.")
 
+                # Broadcast real-time reload to all users
+                broadcast_update(project.project_name, project.client_name)
+
             # === TEAM LEAD ===
-           # === TEAM LEAD ===
             elif user.role == 'team_lead':
                 if project.team_lead != user:
                     return HttpResponseForbidden()
-                
+
                 assign_ids = request.POST.getlist('assign_person')
                 if assign_ids:
                     detail.assign_person.set(User.objects.filter(id__in=assign_ids))
-                
+
                 comments_team_lead = request.POST.get('comments_team_lead')
                 if comments_team_lead is not None:
                     detail.comments_team_lead = comments_team_lead
-                
+
                 detail.save()
 
-                # 🔥 FIXED - Single Team Lead submission link for ALL employees
+                # Single Team Lead submission link applied to ALL employees
                 team_lead_link = request.POST.get('team_lead_submission_link')
                 if team_lead_link:
-                    # Apply the same link to ALL assigned employees
                     for emp in detail.assign_person.all():
-                        obj, created = EmployeeProjectProgress.objects.get_or_create(
-                            project=project,
-                            employee=emp
+                        obj, _ = EmployeeProjectProgress.objects.get_or_create(
+                            project=project, employee=emp
                         )
                         obj.team_lead_submission_link = team_lead_link
                         obj.save()
-                    
-                    # Notify all employees once
                     for emp in detail.assign_person.all():
                         notify(emp, f"🔗 Team Lead {user.username} added a submission link for project '{project.project_name}'")
-                
+
                 # Team Lead final file upload
                 uploaded_files = request.FILES.getlist('final_files')
-                
                 if uploaded_files:
                     for file in uploaded_files:
                         try:
@@ -257,21 +268,23 @@ def project_management_view(request):
                                 file=file,
                                 team_lead_uploaded_by=user
                             )
-                            
-                            # Notify assigned employees
                             for emp in detail.assign_person.all():
                                 notify(emp, f"📁 Team Lead {user.username} uploaded file '{file.name}' for project '{project.project_name}'")
                         except Exception as e:
                             messages.error(request, f"Error uploading file {file.name}: {str(e)}")
-                    
+
                     messages.success(request, f"Project updated successfully. {len(uploaded_files)} file(s) uploaded.")
                 else:
                     messages.success(request, "Project updated successfully.")
-                
+
                 # Notify assigned employees about the update
                 for emp in detail.assign_person.all():
                     notify(emp, f"Team Lead {user.username} updated project '{project.project_name}'")
-           # === EMPLOYEE ===
+
+                # Broadcast real-time reload to all users
+                broadcast_update(project.project_name, project.client_name)
+
+            # === EMPLOYEE ===
             elif user.role == 'employee':
                 if user not in detail.assign_person.all():
                     return HttpResponseForbidden()
@@ -279,64 +292,55 @@ def project_management_view(request):
                 progress = request.POST.get('progress')
                 if progress is not None:
                     progress = int(progress)
-                    # Save individual progress
-                    obj, created = EmployeeProjectProgress.objects.get_or_create(
-                        project=project,
-                        employee=user
+
+                    obj, _ = EmployeeProjectProgress.objects.get_or_create(
+                        project=project, employee=user
                     )
-                    working_hours = request.POST.get('working_hours')
+                    working_hours        = request.POST.get('working_hours')
                     final_submission_link = request.POST.get('final_submission_link')
 
                     obj.progress = progress
-
                     if working_hours:
                         obj.working_hours = float(working_hours)
-
                     if final_submission_link:
                         obj.final_submission_link = final_submission_link
-
                     obj.save()
 
-
-                    # Calculate average progress over all assigned employees
+                    # Recalculate average progress over all assigned employees
                     assigned_employees = detail.assign_person.all()
-
                     total_progress = 0
-                    total_hours = 0
-                    hours_count = 0
+                    total_hours    = 0
+                    hours_count    = 0
 
                     for emp in assigned_employees:
                         try:
-                            emp_obj = EmployeeProjectProgress.objects.get(project=project, employee=emp)
+                            emp_obj      = EmployeeProjectProgress.objects.get(project=project, employee=emp)
                             emp_progress = emp_obj.progress
-                            emp_hours = emp_obj.working_hours
+                            emp_hours    = emp_obj.working_hours
                         except EmployeeProjectProgress.DoesNotExist:
                             emp_progress = 0
-                            emp_hours = None
+                            emp_hours    = None
 
                         total_progress += emp_progress
-
                         if emp_hours is not None:
                             total_hours += emp_hours
                             hours_count += 1
 
                     avg_progress = round(total_progress / assigned_employees.count()) if assigned_employees.exists() else 0
-                    avg_hours = round(total_hours / hours_count, 2) if hours_count else 0
+                    avg_hours    = round(total_hours / hours_count, 2) if hours_count else 0
 
                     project.progress = avg_progress
                     project.save()
 
-
-
                     # Notifications
-                    notify(project.team_lead, f"{user.username} updated their progress to {progress}% for project '{project.project_name}'. Overall project progress: {project.progress}%")
+                    notify(project.team_lead, f"{user.username} updated their progress to {progress}% for project '{project.project_name}'. Overall: {project.progress}%")
                     notify(user, f"You updated your progress to {progress}% for project '{project.project_name}'")
 
                     # Auto-move logic
                     if project.progress == 100:
                         if project.status == 'revision':
                             project.status = 'qa'
-                            project.team_lead_approved = True  # Auto-approve since it's a revision
+                            project.team_lead_approved = True
                             project.save()
                             if project.qa_person:
                                 notify(project.qa_person, f"🔔 All employees completed revisions for project '{project.project_name}' (100%). Please review again.")
@@ -347,219 +351,206 @@ def project_management_view(request):
                 # Handle final files
                 for file in request.FILES.getlist('final_files'):
                     FinalSubmissionFile.objects.create(
-                        project=project,
-                        file=file,
-                        uploaded_by=user
+                        project=project, file=file, uploaded_by=user
                     )
                     notify(project.team_lead, f"📁 {user.username} uploaded final file '{file.name}' for project '{project.project_name}'")
 
                 messages.success(request, "Project progress updated successfully.")
 
+                # Broadcast real-time reload to all users
+                broadcast_update(project.project_name, project.client_name)
+
             return redirect('project_management')
-        
-       # === TEAM LEAD APPROVAL ===
+
+        # ================================================================
+        # === TEAM LEAD APPROVAL ===
+        # ================================================================
         if action == 'team_lead_approve':
             project = get_object_or_404(Project, id=request.POST.get('project_id'))
-            
+
             if user.role == 'team_lead' and project.team_lead == user:
                 project.team_lead_approved = True
-                project.status = 'qa'  # 🔥 Move to QA tab (not approval)
+                project.status = 'qa'
                 project.save()
-                
+
                 messages.success(request, f"Project '{project.project_name}' approved and sent to QA.")
-                
-                # Notify QA person
+
                 if project.qa_person:
                     notify(project.qa_person, f"🔔 Team Lead approved project '{project.project_name}'. Please review for QA.")
-                
-                # Notify all assigned employees
                 for emp in project.projectdetail.assign_person.all():
                     notify(emp, f"✅ Team Lead approved project '{project.project_name}'. Sent to QA.")
-                
+
+                broadcast_update(project.project_name, project.client_name)
                 return redirect('project_management')
             else:
                 return HttpResponseForbidden("Only assigned Team Lead can approve this project.")
-            
-            # === TEAM LEAD REJECTION ===
+
+        # ================================================================
+        # === TEAM LEAD REJECTION ===
+        # ================================================================
         if action == 'team_lead_reject':
             project = get_object_or_404(Project, id=request.POST.get('project_id'))
-            
+
             if user.role == 'team_lead' and project.team_lead == user:
                 tl_reject_instructions = request.POST.get('tl_reject_instructions', '').strip()
-                
+
                 if not tl_reject_instructions:
                     messages.error(request, "Please provide rejection instructions.")
                     return redirect('project_management')
-                
-                # Reset project status
-                project.status = 'active'
-                project.progress = 0  # Reset to 0%
+
+                project.status             = 'active'
+                project.progress           = 0
                 project.team_lead_approved = False
-                
-                # Reset all employee progress to 0
                 EmployeeProjectProgress.objects.filter(project=project).update(progress=0)
-                
+
                 detail, _ = ProjectDetail.objects.get_or_create(project=project)
-                
-                # Append Team Lead rejection instructions
-                # Append Team Lead rejection instructions to NEW field
-                timestamp = timezone.now().strftime('%Y-%m-%d %H:%M')
+                timestamp  = timezone.now().strftime('%Y-%m-%d %H:%M')
+
                 if detail.team_lead_revisions:
                     detail.team_lead_revisions += f"\n\n--- Team Lead Rejection ({timestamp}) ---\n{tl_reject_instructions}"
                 else:
-                    detail.team_lead_revisions = f"--- Team Lead Rejection ({timestamp}) ---\n{tl_reject_instructions}"
-                
+                    detail.team_lead_revisions  = f"--- Team Lead Rejection ({timestamp}) ---\n{tl_reject_instructions}"
+
                 detail.save()
                 project.save()
-                
+
                 messages.warning(request, f"Project '{project.project_name}' rejected and reset to 0%. Employees notified.")
-                
-                # Notify all assigned employees
+
                 for emp in project.projectdetail.assign_person.all():
-                    notify(emp, f"⚠️ Team Lead rejected project '{project.project_name}'. Progress reset to 0%. Check Team Lead revision instructions.")
-                
+                    notify(emp, f"⚠️ Team Lead rejected project '{project.project_name}'. Progress reset to 0%. Check revision instructions.")
+
+                broadcast_update(project.project_name, project.client_name)
                 return redirect('project_management')
             else:
                 return HttpResponseForbidden("Only assigned Team Lead can reject this project.")
-            
+
+        # ================================================================
         # === QA APPROVAL ===
+        # ================================================================
         if action == 'qa_approve':
             project = get_object_or_404(Project, id=request.POST.get('project_id'))
-            
+
             if user.role == 'qa' and project.qa_person == user:
                 project.qa_approved = True
-                project.status = 'approval'  # 🔥 Move to Approval tab
+                project.status      = 'approval'
                 project.save()
-                
+
                 messages.success(request, f"Project '{project.project_name}' approved by QA and moved to Approval tab.")
-                
-                # Notify Team Lead
+
                 if project.team_lead:
                     notify(project.team_lead, f"✅ QA approved project '{project.project_name}'. Moved to Approval.")
-                
-                # Notify all assigned employees
                 for emp in project.projectdetail.assign_person.all():
                     notify(emp, f"✅ QA approved project '{project.project_name}'. Moved to Approval.")
-                
+
+                broadcast_update(project.project_name, project.client_name)
                 return redirect('project_management')
             else:
                 return HttpResponseForbidden("Only assigned QA person can approve this project.")
-            
+
+        # ================================================================
         # === QA SEND TO REVISION ===
+        # ================================================================
         if action == 'qa_send_to_revision':
             project = get_object_or_404(Project, id=request.POST.get('project_id'))
-            
+
             if user.role == 'qa' and project.qa_person == user:
                 qa_revision_instructions = request.POST.get('qa_revision_instructions', '').strip()
-                
+
                 if not qa_revision_instructions:
                     messages.error(request, "Please provide revision instructions.")
                     return redirect('project_management')
-                
-                # Update project status and store revision instructions
-                project.status = 'revision'
-                project.progress = 0  # 🔥 RESET PROGRESS TO 0
-                project.team_lead_approved = False  # Reset approval
-                project.qa_approved = False  # Reset QA approval
+
+                project.status             = 'revision'
+                project.progress           = 0
+                project.team_lead_approved = False
+                project.qa_approved        = False
+
                 detail, _ = ProjectDetail.objects.get_or_create(project=project)
-                
-                # Append QA revision instructions to existing revisions
+
                 if detail.revisions:
                     detail.revisions += f"\n\n--- QA Revision ({timezone.now().strftime('%Y-%m-%d %H:%M')}) ---\n{qa_revision_instructions}"
                 else:
-                    detail.revisions = f"--- QA Revision ({timezone.now().strftime('%Y-%m-%d %H:%M')}) ---\n{qa_revision_instructions}"
-                
-                detail.save()
-                # 🔥 RESET EMPLOYEES' PROGRESS TO 0
-                EmployeeProjectProgress.objects.filter(project=project).update(progress=0, working_hours=0)
+                    detail.revisions  = f"--- QA Revision ({timezone.now().strftime('%Y-%m-%d %H:%M')}) ---\n{qa_revision_instructions}"
 
+                detail.save()
+                EmployeeProjectProgress.objects.filter(project=project).update(progress=0, working_hours=0)
                 project.save()
-                
+
                 messages.warning(request, f"Project '{project.project_name}' sent to Revision tab with instructions.")
-                
-                # Notify Team Lead
+
                 notify(project.team_lead, f"⚠️ QA sent project '{project.project_name}' to Revision. Instructions: {qa_revision_instructions[:100]}...")
-                
-                # Notify all assigned employees
                 for emp in project.projectdetail.assign_person.all():
                     notify(emp, f"⚠️ QA requires revisions for project '{project.project_name}'. Check revision instructions. Progress reset to 0%.")
-                
+
+                broadcast_update(project.project_name, project.client_name)
                 return redirect('project_management')
             else:
                 return HttpResponseForbidden("Only assigned QA person can send project to revision.")
-            
-            # === MARK AS COMPLETE (Admin only) ===
+
+        # ================================================================
+        # === MARK AS COMPLETE (Admin only) ===
+        # ================================================================
         if action == 'mark_complete':
             project = get_object_or_404(Project, id=request.POST.get('project_id'))
-            
+
             if user.is_superuser or user.role == 'admin':
                 if not project.qa_approved:
                     messages.error(request, "Project must be QA approved before marking as complete.")
                     return redirect('project_management')
-                
+
                 project.status = 'completed'
                 project.save()
-                
+
                 messages.success(request, f"Project '{project.project_name}' marked as completed.")
-                
-                # Notify Team Lead
+
                 if project.team_lead:
                     notify(project.team_lead, f"✅ Project '{project.project_name}' has been marked as completed by Admin.")
-                
-                # Notify QA Person
                 if project.qa_person:
                     notify(project.qa_person, f"✅ Project '{project.project_name}' has been marked as completed.")
-                
-                # Notify all assigned employees
                 for emp in project.projectdetail.assign_person.all():
                     notify(emp, f"🎉 Project '{project.project_name}' has been completed!")
-                
+
+                broadcast_update(project.project_name, project.client_name)
                 return redirect('project_management')
             else:
                 return HttpResponseForbidden("Only Admin can mark projects as complete.")
-    # Calculate days left for each project and convert to list
-    # 🔥 OPTIMIZED: Fetch all working hours in ONE query instead of per-project loop
+
+    # ================================================================
+    # GET — build project list for rendering
+    # ================================================================
     from django.db.models import Sum
+
     projects = projects.select_related('team_lead', 'qa_person').prefetch_related(
         'projectdetail__assign_person'
     )
-    
-    # Get all working hours in a single DB query
+
+    # Total working hours per project in a single DB query
     hours_map = {}
     for ep in EmployeeProjectProgress.objects.filter(project__in=projects).values('project_id').annotate(total=Sum('working_hours')):
         hours_map[ep['project_id']] = ep['total'] or 0
 
     projects = list(projects)
+
     from django.utils.timezone import localdate
-    today = localdate()  # Uses your Django TIME_ZONE setting (PKT)
+    today = localdate()
 
     for p in projects:
-        if p.due_date:
-            p.days_left = (p.due_date - today).days
-        else:
-            p.days_left = None
-        p.total_working_hours = hours_map.get(p.id, 0)
+        p.days_left          = (p.due_date      - today).days if p.due_date      else None
         p.expected_days_left = (p.expected_date - today).days if p.expected_date else None
+        p.total_working_hours = hours_map.get(p.id, 0)
 
     def sort_priority(p):
-        due = p.days_left
-        exp = p.expected_days_left
-
         def score(days):
-            if days is None:
-                return float('inf')     # no date → bottom
-            if days < 0:
-                return float('inf')     # past date → bottom
-            return days                 # 0 = today (top), then 1, 2, 3...
-
-        return min(score(due), score(exp))
+            if days is None or days < 0:
+                return float('inf')
+            return days
+        return min(score(p.days_left), score(p.expected_days_left))
 
     projects = sorted(projects, key=sort_priority)
-    
-    # 🔥 NEW: Calculate if there are any projects needing approval from current user
+
+    # Check if any projects need approval action from current user
     has_approval_actions = False
     for p in projects:
-        # Check if any project needs approval from current user
         if user.role == 'team_lead' and p.progress == 100 and not p.team_lead_approved and p.team_lead == user:
             has_approval_actions = True
             break
@@ -569,40 +560,37 @@ def project_management_view(request):
         elif (user.is_superuser or user.role == 'admin') and p.qa_approved and p.status != 'completed':
             has_approval_actions = True
             break
-    
-    # 🔥 Calculate counts for each status tab
-    # Get all projects for the user (before filtering by active_tab)
+
+    # Status tab counts (unfiltered by active_tab)
     if user.is_superuser or user.role == 'admin':
         all_user_projects = Project.objects.all()
     elif user.role == 'team_lead':
         all_user_projects = Project.objects.filter(team_lead=user)
     elif user.role == 'qa':
         all_user_projects = Project.objects.filter(qa_person=user)
-    else:  # employee
+    else:
         all_user_projects = Project.objects.filter(projectdetail__assign_person=user)
 
-    # Count projects in each status
-    active_count = all_user_projects.filter(status='active').count()
-    qa_count = all_user_projects.filter(status='qa').count()
+    active_count   = all_user_projects.filter(status='active').count()
+    qa_count       = all_user_projects.filter(status='qa').count()
     revision_count = all_user_projects.filter(status='revision').count()
     approval_count = all_user_projects.filter(status='approval').count()
     completed_count = all_user_projects.filter(status='completed').count()
-    
+
     return render(request, 'core/dashbaord/project_management.html', {
-        'projects': projects,
-        'all_team_leads': User.objects.filter(role='team_lead'),
-        'all_employees': User.objects.filter(role='employee'),
-        'all_qa': User.objects.filter(role='qa'),
-        'user': user,
-        'query': query,
-        'active_tab': active_tab,
+        'projects':             projects,
+        'all_team_leads':       User.objects.filter(role='team_lead'),
+        'all_employees':        User.objects.filter(role='employee'),
+        'all_qa':               User.objects.filter(role='qa'),
+        'user':                 user,
+        'query':                query,
+        'active_tab':           active_tab,
         'has_approval_actions': has_approval_actions,
-        # 🔥 Add counts
-        'active_count': active_count,
-        'qa_count': qa_count,
-        'revision_count': revision_count,
-        'approval_count': approval_count,
-        'completed_count': completed_count,
+        'active_count':         active_count,
+        'qa_count':             qa_count,
+        'revision_count':       revision_count,
+        'approval_count':       approval_count,
+        'completed_count':      completed_count,
     })
 
 

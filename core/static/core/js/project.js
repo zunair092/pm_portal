@@ -1,12 +1,9 @@
 $(document).ready(function () {
-
     $('.employee-select').select2({
         placeholder: "Select estimators",
         width: '100%'
     });
-
     $('.modal').on('shown.bs.modal', function () {
-
         $(this).find('.employee-select').each(function () {
             if (!$(this).hasClass('select2-hidden-accessible')) {
                 $(this).select2({
@@ -16,17 +13,18 @@ $(document).ready(function () {
                 });
             }
         });
-
     });
-
 });
 
-// WebSocket - Notification System
+// =============================================
+// WebSocket - Real-Time Notification System
+// =============================================
 console.log("Setting up WebSocket...");
 
 const wsScheme = window.location.protocol === "https:" ? "wss://" : "ws://";
 const wsPath = wsScheme + window.location.host + "/ws/notifications/";
 let socket = null;
+let isReloading = false; // Prevent multiple simultaneous reloads
 
 function connect() {
     socket = new WebSocket(wsPath);
@@ -37,107 +35,193 @@ function connect() {
 
     socket.onmessage = function (e) {
         const data = JSON.parse(e.data);
-
         console.log("Received WebSocket message:", data);
 
-        // Auto reload when a new project is added
+        // Prevent stacking multiple reloads
+        if (isReloading) return;
+
+        // ── New project added broadcast (all users) ──
         if (data.type === "project_added") {
-            console.log("New project added. Reloading page...");
-
-            // Optional notification before reload
-            showNotification(
-                `New Project Added: ${data.project_name || ''}`
-            );
-
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
-
+            const projectName = data.project_name ? `"${data.project_name}"` : "A new project";
+            const clientInfo = data.client_name ? ` (${data.client_name})` : "";
+            showNotification(`🚀 New Project Added: ${projectName}${clientInfo}`, "primary");
+            scheduleReload(1500);
             return;
         }
 
-        // Existing notifications
+        // ── Personal notification (status change, approval, progress update, etc.) ──
         if (data.type === "notification") {
             console.log("Notification received:", data.message);
-            showNotification(data.message);
+            showNotification(data.message, "info");
+            scheduleReload(2000);
+            return;
         }
 
-        // Backward compatibility with old messages
+        // ── Backward compatibility with old message format ──
         if (data.message && !data.type) {
-            showNotification(data.message);
+            showNotification(data.message, "info");
+            scheduleReload(2000);
         }
     };
+
     socket.onclose = function (e) {
-        console.log("Socket is closed. Reconnecting in 3 seconds...", e.reason);
+        console.log("Socket closed. Reconnecting in 3 seconds...", e.reason);
         setTimeout(function () {
             connect();
         }, 3000);
     };
 
     socket.onerror = function (err) {
-        console.error("Socket encountered error:", err.message, "Closing socket");
+        console.error("Socket error:", err.message, "— closing socket");
         socket.close();
     };
 }
 
-function showNotification(message) {
-    // Desktop Toast Notification
+// ── Schedule a page reload with a "Refreshing..." banner ──
+function scheduleReload(delayMs) {
+    if (isReloading) return;
+    isReloading = true;
+
+    // Show subtle refresh banner at bottom center
+    const banner = document.createElement("div");
+    banner.id = "ws-refresh-banner";
+    banner.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(30, 30, 30, 0.85);
+        color: #fff;
+        padding: 10px 24px;
+        border-radius: 30px;
+        font-size: 13px;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    `;
+    banner.innerHTML = `
+        <span style="display:inline-block;animation:wsSpin 0.8s linear infinite">⟳</span>
+        Refreshing page…
+    `;
+    document.body.appendChild(banner);
+
+    setTimeout(() => {
+        window.location.reload();
+    }, delayMs);
+}
+
+// ── Show in-page toast notification ──
+function showNotification(message, type = "primary") {
+    // ── Desktop push notification (if permitted) ──
     if (Notification.permission === "granted") {
-        const notification = new Notification("PM Portal Update", {
+        const desktopNote = new Notification("PM Portal Update", {
             body: message,
             icon: "/static/core/img/logo.png",
             silent: false
         });
-        notification.onclick = function () {
+        desktopNote.onclick = function () {
             window.focus();
             this.close();
         };
     }
 
-    // In-Page UI Alert
-    const alertContainer = document.getElementById('notification-container') || createAlertContainer();
+    // ── In-page toast ──
+    const container = document.getElementById("notification-container") || createAlertContainer();
 
-    const alertBox = document.createElement('div');
-    alertBox.className = "alert alert-primary alert-dismissible fade show shadow-lg border-start border-4 border-primary";
-    alertBox.role = "alert";
-    alertBox.style.marginBottom = "10px";
-    alertBox.style.minWidth = "300px";
+    const colorMap = {
+        primary: { border: "#3b82f6", bg: "#eff6ff", text: "#1e40af", icon: "🔔" },
+        info:    { border: "#6366f1", bg: "#eef2ff", text: "#3730a3", icon: "ℹ️"  },
+        success: { border: "#10b981", bg: "#ecfdf5", text: "#065f46", icon: "✅" },
+        warning: { border: "#f59e0b", bg: "#fffbeb", text: "#92400e", icon: "⚠️" },
+        danger:  { border: "#ef4444", bg: "#fef2f2", text: "#991b1b", icon: "❌" },
+    };
+    const c = colorMap[type] || colorMap.primary;
 
-    alertBox.innerHTML = `
-            <div class="d-flex align-items-center">
-                <div class="me-3">
-                    <strong>🔔 New Update</strong>
-                </div>
-                <div>${message}</div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        `;
-    alertContainer.appendChild(alertBox);
+    const toast = document.createElement("div");
+    toast.style.cssText = `
+        background: ${c.bg};
+        border-left: 4px solid ${c.border};
+        color: ${c.text};
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        font-size: 13.5px;
+        line-height: 1.5;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        min-width: 300px;
+        max-width: 380px;
+        animation: wsSlideIn 0.3s ease;
+        margin-bottom: 0;
+    `;
+    toast.innerHTML = `
+        <span style="font-size:16px;flex-shrink:0;margin-top:1px">${c.icon}</span>
+        <div style="flex:1">
+            <div style="font-weight:600;margin-bottom:2px">PM Portal Update</div>
+            <div style="opacity:0.9">${message}</div>
+        </div>
+        <button onclick="this.closest('[data-ws-toast]').remove()"
+                style="background:none;border:none;cursor:pointer;font-size:16px;opacity:0.5;padding:0;line-height:1;flex-shrink:0">
+            ×
+        </button>
+    `;
+    toast.setAttribute("data-ws-toast", "true");
+    container.appendChild(toast);
 
-    // Auto-remove after 8 seconds
+    // Auto-dismiss after 7 seconds
     setTimeout(() => {
-        if (alertBox) {
-            alertBox.classList.remove('show');
-            setTimeout(() => alertBox.remove(), 500);
+        if (toast && toast.parentNode) {
+            toast.style.animation = "wsSlideOut 0.3s ease";
+            setTimeout(() => toast.remove(), 280);
         }
-    }, 8000);
+    }, 7000);
 }
 
+// ── Create fixed toast container ──
 function createAlertContainer() {
-    const container = document.createElement('div');
-    container.id = 'notification-container';
-    container.style.position = 'fixed';
-    container.style.top = '20px';
-    container.style.right = '20px';
-    container.style.zIndex = '9999';
+    const container = document.createElement("div");
+    container.id = "notification-container";
+    container.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 99998;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    `;
     document.body.appendChild(container);
     return container;
 }
 
-// Request notification permissions on startup
+// ── Inject keyframe animations ──
+(function injectStyles() {
+    const style = document.createElement("style");
+    style.textContent = `
+        @keyframes wsSlideIn {
+            from { opacity: 0; transform: translateX(30px); }
+            to   { opacity: 1; transform: translateX(0);    }
+        }
+        @keyframes wsSlideOut {
+            from { opacity: 1; transform: translateX(0);    }
+            to   { opacity: 0; transform: translateX(30px); }
+        }
+        @keyframes wsSpin {
+            from { transform: rotate(0deg);   }
+            to   { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
+// ── Request desktop notification permission on load ──
 if (Notification.permission !== "granted" && Notification.permission !== "denied") {
     Notification.requestPermission();
 }
 
-// Initialize WebSocket connection
+// ── Boot WebSocket ──
 connect();
