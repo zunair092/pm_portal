@@ -37,11 +37,36 @@ function connect() {
 
     socket.onmessage = function (e) {
         const data = JSON.parse(e.data);
-        const msg = data.message;
-        console.log("Notification received:", msg);
-        showNotification(msg);
-    };
 
+        console.log("Received WebSocket message:", data);
+
+        // Auto reload when a new project is added
+        if (data.type === "project_added") {
+            console.log("New project added. Reloading page...");
+
+            // Optional notification before reload
+            showNotification(
+                `New Project Added: ${data.project_name || ''}`
+            );
+
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+
+            return;
+        }
+
+        // Existing notifications
+        if (data.type === "notification") {
+            console.log("Notification received:", data.message);
+            showNotification(data.message);
+        }
+
+        // Backward compatibility with old messages
+        if (data.message && !data.type) {
+            showNotification(data.message);
+        }
+    };
     socket.onclose = function (e) {
         console.log("Socket is closed. Reconnecting in 3 seconds...", e.reason);
         setTimeout(function () {

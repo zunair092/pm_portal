@@ -125,7 +125,7 @@ def project_management_view(request):
                 due_date=due_date,
                 expected_date = expected,
                 project_link=request.POST.get('project_link'),
-                team_lead=User.objects.get(id=request.POST.get('team_lead')),
+                team_lead=User.objects.get(id=request.POST.get('team_lead')) if request.POST.get('team_lead') else None,
                 qa_person=User.objects.get(id=request.POST.get('qa_person')) if request.POST.get('qa_person') else None,
                 progress=request.POST.get('progress') or 0,
                 status='active'
@@ -148,12 +148,23 @@ def project_management_view(request):
                 ProjectFile.objects.create(project_detail=detail, file=f)
 
             messages.success(request, "Project added successfully.")
-
             # --- NOTIFICATIONS ---
-            notify(project.team_lead, f"You are assigned as Team Lead for project '{project.project_name}'")
+            if project.team_lead:
+                notify(project.team_lead, f"You are assigned as Team Lead for project '{project.project_name}'")
             for emp in assigned_users:
                 notify(emp, f"You have been assigned to project '{project.project_name}'")
 
+            # --- BROADCAST to all users to refresh ---
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                "project_updates",
+                {
+                    "type": "project_added",
+                    "project_name": project.project_name,
+                }
+            )
             return redirect('project_management')
 
         # ---------- UPDATE PROJECT ----------
