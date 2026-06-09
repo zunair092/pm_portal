@@ -36,9 +36,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
-            "socket_timeout": None,        # disable read timeout
-            "socket_connect_timeout": 5,   # still timeout on connect
+            "hosts": ["redis://127.0.0.1:6379"],
         },
     }
 }
