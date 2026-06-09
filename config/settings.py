@@ -73,9 +73,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'pm_portal_db',
+        'NAME': 'pm_portal',
         'USER': 'pm_user',
-        'PASSWORD': 'Zaini1588@@',
+        'PASSWORD': 'NewStrongPassword123',
         'HOST': 'localhost',
         'PORT': '5432',
     }
