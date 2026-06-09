@@ -8,7 +8,12 @@ SECRET_KEY = "django-insecure-4ax=0&#j6c$^@q(rsa01dxqf76zbrosnz516!is$x-1yqmc+a4
 DEBUG = False
 
 # FIXED: Added your domain and IP
-ALLOWED_HOSTS = ['93.188.162.90', 'portal.as-estimation.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = [
+    "portal.asestimation.org",
+    "152.42.167.76",
+    "127.0.0.1",
+    "localhost"
+]
 
 AUTH_USER_MODEL = 'core.User'
 
@@ -99,9 +104,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # config/settings.py
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://portal.as-estimation.com",
-    "https://portal.as-estimation.com", # Add HTTPS just in case
-    "http://93.188.162.90",
+    "http://portal.asestimation.org",
+    "https://portal.asestimation.org",
+    "http://152.42.167.76",
 ]
 
 # Add this to help Django trust the proxy header
